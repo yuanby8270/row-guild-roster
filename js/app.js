@@ -1,49 +1,28 @@
-// ** 1. Tailwind Configuration (必須放在最前面，讓 CDN 讀取擴展設置) **
+// ** 1. Tailwind Configuration **
 tailwind.config = {
     theme: {
         extend: {
-            colors: { 
-                ro: { 
-                    primary: '#4380D3',
-                    bg: '#e0f2fe',
-                }
-            },
-            fontFamily: {
-                'cute': ['"ZCOOL KuaiLe"', '"Varela Round"', 'sans-serif']
-            },
+            colors: { ro: { primary: '#4380D3', bg: '#e0f2fe' } },
+            fontFamily: { 'cute': ['"ZCOOL KuaiLe"', '"Varela Round"', 'sans-serif'] },
             animation: {
                 'float': 'float 6s ease-in-out infinite',
                 'jelly': 'jelly 2s infinite',
                 'cloud-move': 'cloudMove 60s linear infinite',
                 'poring-jump': 'poringJump 1s infinite alternate',
+                'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite'
             },
             keyframes: {
-                float: {
-                    '0%, 100%': { transform: 'translateY(0)' },
-                    '50%': { transform: 'translateY(-10px)' },
-                },
-                jelly: {
-                    '0%, 100%': { transform: 'scale(1, 1)' },
-                    '25%': { transform: 'scale(0.9, 1.1)' },
-                    '50%': { transform: 'scale(1.1, 0.9)' },
-                    '75%': { transform: 'scale(0.95, 1.05)' },
-                },
-                cloudMove: {
-                    '0%': { backgroundPosition: '0 0' },
-                    '100%': { backgroundPosition: '1000px 0' },
-                },
-                poringJump: {
-                    '0%': { transform: 'translateY(0) scale(1.1, 0.9)' },
-                    '100%': { transform: 'translateY(-20px) scale(0.9, 1.1)' }
-                }
+                float: { '0%, 100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-10px)' } },
+                jelly: { '0%, 100%': { transform: 'scale(1, 1)' }, '25%': { transform: 'scale(0.9, 1.1)' }, '50%': { transform: 'scale(1.1, 0.9)' }, '75%': { transform: 'scale(0.95, 1.05)' } },
+                cloudMove: { '0%': { backgroundPosition: '0 0' }, '100%': { backgroundPosition: '1000px 0' } },
+                poringJump: { '0%': { transform: 'translateY(0) scale(1.1, 0.9)' }, '100%': { transform: 'translateY(-20px) scale(0.9, 1.1)' } }
             }
         }
     }
 }
 
-
-// ** 2. 常量與初始數據 **
-const DATA_VERSION = "6.5"; // 更新版本：精確時間排序版
+// ** 2. Constants & Initial Data **
+const DATA_VERSION = "7.0";
 const JOB_STYLES = [
     { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' }, { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-cross' }, { key: ['鐵匠', '商人'], class: 'bg-job-blacksmith', icon: 'fa-hammer' },
     { key: ['獵人', '弓箭手'], class: 'bg-job-hunter', icon: 'fa-crosshairs' }, { key: ['詩人'], class: 'bg-job-bard', icon: 'fa-music' }, { key: ['煉金'], class: 'bg-job-alchemist', icon: 'fa-flask' },
@@ -60,7 +39,6 @@ const JOB_STRUCTURE = {
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
 
-// 初始名單 (程式會依照此順序寫入時間戳記，間隔1秒，確保 #01 就是第一個)
 const SEED_DATA = [
     { lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
     { lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
@@ -138,10 +116,6 @@ const SEED_DATA = [
 ];
 
 const SEED_GROUPS = [];
-
-// =======================================================
-// [START] 自動連線程式碼：硬編碼 Firebase 設定檔
-// =======================================================
 const __firebase_config = JSON.stringify({
   "apiKey": "AIzaSyCxVEcgftiu7qmHhgLV-XaLzf6naBhaf-k",
   "authDomain": "ro123-aae1e.firebaseapp.com",
@@ -151,332 +125,259 @@ const __firebase_config = JSON.stringify({
   "appId": "1:401692984816:web:711dacb2277b52fb7d0935",
   "measurementId": "G-SVYZGQZB83"
 });
-// =======================================================
-// [END] 自動連線程式碼
-// =======================================================
-
-
-// ** 3. App 應用程式邏輯 **
 
 const App = {
-    db: null, auth: null, collectionMembers: 'members', collectionGroups: 'groups', 
-    members: [], groups: [], history: [], 
+    db: null, auth: null, 
+    collectionMembers: 'members', 
+    collectionGroups: 'groups', 
+    collectionActivities: 'activities',
+    members: [], groups: [], activities: [], history: [], 
     currentFilter: 'all', currentJobFilter: 'all', currentTab: 'home', mode: 'demo', currentSquadMembers: [],
     userRole: 'guest', 
 
     init: async function() {
         const savedRole = localStorage.getItem('row_user_role');
-        if (savedRole && ['admin', 'master', 'commander'].includes(savedRole)) {
-            this.userRole = savedRole;
-        }
+        if (savedRole && ['admin', 'master', 'commander'].includes(savedRole)) this.userRole = savedRole;
         this.loadHistory(); 
 
         if (typeof firebase !== 'undefined') {
             let config = null;
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-                try { config = JSON.parse(__firebase_config); } catch(e) { console.error("Config Error:", e); }
-            }
-            if (!config) { 
-                const stored = localStorage.getItem('row_firebase_config'); 
-                if (stored) {
-                    try { config = JSON.parse(stored); } catch(e) { localStorage.removeItem('row_firebase_config'); }
-                }
-            }
-            
-            if (config) { this.initFirebase(config); } else { this.initDemoMode(); }
-        } else { 
-            this.initDemoMode(); 
-        }
-        this.setupListeners();
-        this.updateAdminUI();
-        this.switchTab('home'); 
+            if (typeof __firebase_config !== 'undefined') { try { config = JSON.parse(__firebase_config); } catch(e) {} }
+            if (!config) { const stored = localStorage.getItem('row_firebase_config'); if (stored) config = JSON.parse(stored); }
+            if (config) this.initFirebase(config); else this.initDemoMode();
+        } else this.initDemoMode();
+        this.setupListeners(); this.updateAdminUI(); this.switchTab('home'); 
     },
     
-    // =======================================================
-    // ** 【關鍵優化】sortMembers 函式 **
-    // 強制使用毫秒精確度排序，確保 #01, #02... 順序絕對正確
-    // =======================================================
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
             const getTime = (m) => {
                 if (m.createdAt === null) return Date.now(); 
-                
-                // 處理 Firebase Timestamp 物件 (seconds + nanoseconds)
                 if (typeof m.createdAt === 'object') {
-                    // 如果有 toMillis 函式就用，否則手動計算毫秒
                     if (typeof m.createdAt.toMillis === 'function') return m.createdAt.toMillis();
-                    if (m.createdAt.seconds !== undefined) {
-                        return m.createdAt.seconds * 1000 + (m.createdAt.nanoseconds || 0) / 1000000;
-                    }
+                    if (m.createdAt.seconds !== undefined) return m.createdAt.seconds * 1000 + (m.createdAt.nanoseconds || 0) / 1000000;
                 }
-                
-                // 處理純數字或 Date 字串
                 return new Date(m.createdAt).getTime() || 0; 
             };
-
-            const timeA = getTime(a);
-            const timeB = getTime(b);
-            
-            // 升序排列 (最舊的排第一，最新的排最後)
+            const timeA = getTime(a); const timeB = getTime(b);
             if (timeA !== timeB) return timeA - timeB;
-            
-            // 萬一時間完全相同，用名稱備案
             return (a.gameName || '').localeCompare(b.gameName || '');
         });
     },
-    // =======================================================
 
     initFirebase: async function(config) {
         try {
             if (!firebase.apps.length) firebase.initializeApp(config);
             this.auth = firebase.auth(); this.db = firebase.firestore(); this.mode = 'firebase';
-            
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await this.auth.signInWithCustomToken(__initial_auth_token);
-                } else {
-                    await this.auth.signInAnonymously();
-                }
-            } catch(authErr) { console.error("Auth failed:", authErr); }
-
+            try { if (typeof __initial_auth_token !== 'undefined') await this.auth.signInWithCustomToken(__initial_auth_token); else await this.auth.signInAnonymously(); } catch(e) {}
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
             const publicData = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
             
             publicData.collection(this.collectionMembers).onSnapshot(snap => { 
                 const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
                 this.members = this.sortMembers(arr); 
-                if (snap.size === 0) this.seedFirebaseMembers(); else { this.render(); } 
-            }, err => console.error("Firestore Members Error:", err));
-
+                if (snap.size === 0) this.seedFirebaseMembers(); else this.render(); 
+            });
             publicData.collection(this.collectionGroups).onSnapshot(snap => { 
                 const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
-                this.groups = arr; 
-                this.render(); 
-            }, err => console.error("Firestore Groups Error:", err));
-
-        } catch (e) { 
-            console.error("Firebase Init Failed", e); 
-            this.initDemoMode(); 
-        }
+                this.groups = arr; this.render(); 
+            });
+            publicData.collection(this.collectionActivities).orderBy('createdAt', 'desc').onSnapshot(snap => {
+                const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+                this.activities = arr; this.renderActivities();
+            });
+        } catch (e) { this.initDemoMode(); }
     },
 
     initDemoMode: function() {
         this.mode = 'demo';
-        try {
-            const storedMem = localStorage.getItem('row_local_members'); 
-            const storedGrp = localStorage.getItem('row_local_groups');
-            const currentVer = localStorage.getItem('row_data_ver');
-            const APP_VER = '27.0'; 
-
-            if (currentVer !== APP_VER) {
-                this.members = JSON.parse(JSON.stringify(SEED_DATA));
-                this.members = this.members.map((m, i) => ({...m, createdAt: Date.now() + i * 1000}));
-                
-                if (storedGrp) { try { this.groups = JSON.parse(storedGrp); } catch(e) { this.groups = []; } } 
-                else { this.groups = JSON.parse(JSON.stringify(SEED_GROUPS)); }
-                
-                localStorage.setItem('row_data_ver', APP_VER);
-                this.saveLocal();
-            } else {
-                if (storedMem) { try { this.members = JSON.parse(storedMem); } catch(e) { this.members = JSON.parse(JSON.stringify(SEED_DATA)); } }
-                else { this.members = JSON.parse(JSON.stringify(SEED_DATA)); }
-                
-                if (storedGrp) { try { this.groups = JSON.parse(storedGrp); } catch(e) { this.groups = JSON.parse(JSON.stringify(SEED_GROUPS)); } }
-                else { this.groups = JSON.parse(JSON.stringify(SEED_GROUPS)); }
-            }
-        } catch(e) {
-            console.error("Demo init error", e);
-            this.members = JSON.parse(JSON.stringify(SEED_DATA));
-            this.groups = [];
+        const currentVer = localStorage.getItem('row_data_ver'); const APP_VER = '27.0'; 
+        if (currentVer !== APP_VER) {
+            this.members = JSON.parse(JSON.stringify(SEED_DATA)).map((m, i) => ({...m, createdAt: Date.now() + i * 1000}));
+            this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
+            this.activities = [];
+            localStorage.setItem('row_data_ver', APP_VER); this.saveLocal();
+        } else {
+            this.members = JSON.parse(localStorage.getItem('row_local_members') || JSON.stringify(SEED_DATA));
+            this.groups = JSON.parse(localStorage.getItem('row_local_groups') || "[]");
+            this.activities = JSON.parse(localStorage.getItem('row_local_activities') || "[]");
         }
-        this.members = this.sortMembers(this.members); 
-        this.render();
+        this.members = this.sortMembers(this.members); this.render();
     },
 
-    // =======================================================
-    // ** 【修復項目】App.seedFirebaseMembers 函式 **
-    // 確保初始化寫入時間間隔為 1000ms (1秒)，防止排序混亂
-    // =======================================================
     seedFirebaseMembers: async function() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
-        const batch = this.db.batch();
-        const now = Date.now(); 
-        
+        const batch = this.db.batch(); const now = Date.now(); 
         SEED_DATA.forEach((item, index) => { 
             const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
-            const { id, ...data } = item;
-            
-            // ** 關鍵：間隔 1000ms **
-            data.createdAt = new Date(now + index * 1000); 
-            
+            const { id, ...data } = item; data.createdAt = new Date(now + index * 1000); 
             batch.set(ref, data); 
         });
-        
         await batch.commit();
-        console.log("Seed data written with random IDs and 1s sequential timestamps.");
     },
-    // =======================================================
 
     saveLocal: function() {
         if (this.mode === 'demo') { 
             localStorage.setItem('row_local_members', JSON.stringify(this.members)); 
             localStorage.setItem('row_local_groups', JSON.stringify(this.groups)); 
-            localStorage.setItem('row_mod_history', JSON.stringify(this.history)); 
+            localStorage.setItem('row_local_activities', JSON.stringify(this.activities));
             this.render(); 
         }
     },
-    
-    // ... (loadHistory, logChange, showHistoryModal, openLoginModal, handleLogin, updateAdminUI, switchTab, handleMainAction 保持不變，省略以節省篇幅，但請確保完整貼上之前的版本) ...
-    loadHistory: function() {
-        if (this.mode === 'demo') {
-            const storedHistory = localStorage.getItem('row_mod_history');
-            if (storedHistory) { try { this.history = JSON.parse(storedHistory); } catch(e) { this.history = []; } }
-        }
+
+    // --- Activity System ---
+    renderActivities: function() {
+        const grid = document.getElementById('activityGrid');
+        if (this.activities.length === 0) { grid.innerHTML = ''; document.getElementById('noActivitiesMsg').classList.remove('hidden'); return; }
+        document.getElementById('noActivitiesMsg').classList.add('hidden');
+
+        grid.innerHTML = this.activities.map(act => {
+            const claimedCount = (act.claimed || []).length;
+            const total = this.members.length;
+            const progress = Math.round((claimedCount / total) * 100) || 0;
+            return `
+                <div class="bg-white rounded-2xl p-5 shadow-sm border border-pink-100 relative overflow-hidden cursor-pointer hover:shadow-md transition group" onclick="app.openClaimModal('${act.id}')">
+                    <div class="absolute top-0 right-0 w-24 h-24 bg-pink-50 rounded-full -mr-10 -mt-10 opacity-50 group-hover:scale-110 transition"></div>
+                    <div class="relative">
+                        <h3 class="text-lg font-black text-slate-800 mb-1 truncate">${act.title}</h3>
+                        <p class="text-xs text-slate-500 line-clamp-2 mb-4 h-8">${act.desc}</p>
+                        <div class="flex justify-between items-end"><div><span class="text-3xl font-black text-pink-500">${claimedCount}</span><span class="text-xs text-slate-400 font-bold">/ ${total} 人已領取</span></div><div class="bg-pink-500 text-white w-8 h-8 rounded-full flex items-center justify-center shadow-lg shadow-pink-200"><i class="fas fa-gift"></i></div></div>
+                        <div class="w-full bg-slate-100 h-1.5 rounded-full mt-3 overflow-hidden"><div class="bg-pink-400 h-full rounded-full transition-all duration-1000" style="width: ${progress}%"></div></div>
+                    </div>
+                </div>`;
+        }).join('');
     },
-    logChange: function(action, details, targetId) {
-        const log = { timestamp: Date.now(), user: this.userRole, action: action, details: details, targetId: targetId || 'N/A' };
-        this.history.unshift(log); 
-        if (this.mode === 'demo') { localStorage.setItem('row_mod_history', JSON.stringify(this.history)); }
+    openActivityEditModal: function() {
+        document.getElementById('editActId').value = ''; document.getElementById('inputActTitle').value = ''; document.getElementById('inputActDesc').value = '';
+        document.getElementById('editActivityTitle').innerText = "新增活動"; app.showModal('editActivityModal');
     },
-    showHistoryModal: function() {
-        if (!['master', 'admin'].includes(this.userRole)) { alert("權限不足"); return; }
-        this.loadHistory(); 
-        const list = document.getElementById('historyList');
-        list.innerHTML = this.history.map(log => {
-            const date = new Date(log.timestamp).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-            const color = log.action.includes('DELETE') || log.action.includes('解散') ? 'text-red-600' : 'text-blue-600';
-            return `<div class="p-3 bg-slate-50 border border-slate-200 rounded-lg"><div class="flex justify-between items-center text-xs text-slate-500 font-mono mb-1"><span>${date}</span><span class="${color} font-bold">${log.action}</span></div><p class="text-sm text-slate-800">${log.details}</p><span class="text-[10px] text-slate-400">by ${log.user} (ID: ${log.targetId})</span></div>`;
-        }).join('') || '<p class="text-center text-slate-400 mt-4">尚無修改紀錄。</p>';
-        this.showModal('historyModal');
+    editActivity: function() {
+        const act = this.activities.find(a => a.id === document.getElementById('actId').value); if(!act) return;
+        app.closeModal('activityModal');
+        document.getElementById('editActId').value = act.id; document.getElementById('inputActTitle').value = act.title; document.getElementById('inputActDesc').value = act.desc;
+        document.getElementById('editActivityTitle').innerText = "編輯活動"; app.showModal('editActivityModal');
     },
-    openLoginModal: function() {
-        if(this.userRole !== 'guest') { 
-            if(confirm("確定要登出嗎？")) { this.userRole = 'guest'; localStorage.removeItem('row_user_role'); this.updateAdminUI(); } 
-        } else { document.getElementById('loginForm').reset(); this.showModal('loginModal'); }
+    saveActivity: async function() {
+        const id = document.getElementById('editActId').value;
+        const title = document.getElementById('inputActTitle').value.trim(); const desc = document.getElementById('inputActDesc').value.trim();
+        if(!title) { alert("請輸入標題"); return; }
+        const actData = { title, desc, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        if(!id) { actData.createdAt = firebase.firestore.FieldValue.serverTimestamp(); actData.claimed = []; }
+        try {
+            const col = this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data').collection(this.collectionActivities);
+            if(id) await col.doc(id).update(actData); else await col.add(actData);
+            app.closeModal('editActivityModal');
+        } catch(e) { alert("活動儲存失敗"); }
     },
-    handleLogin: function() {
-        const u = document.getElementById('loginUser').value; const p = document.getElementById('loginPass').value;
-        if(p !== '123456') { alert("密碼錯誤"); return; }
-        if(u === 'poppy') this.userRole = 'master'; else if (u === 'yuan') this.userRole = 'admin'; else if (u === 'commander') this.userRole = 'commander'; else { alert("帳號錯誤"); return; }
-        localStorage.setItem('row_user_role', this.userRole);
-        this.closeModal('loginModal'); this.updateAdminUI(); alert("登入成功！");
+    deleteActivity: async function() {
+        if(!confirm("確定要刪除此活動嗎？")) return;
+        try {
+            await this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data').collection(this.collectionActivities).doc(document.getElementById('actId').value).delete();
+            app.closeModal('activityModal');
+        } catch(e) { alert("刪除失敗"); }
+    },
+    openClaimModal: function(actId) {
+        const act = this.activities.find(a => a.id === actId); if(!act) return;
+        document.getElementById('actId').value = act.id; document.getElementById('actTitleDisplay').innerText = act.title; document.getElementById('actDescDisplay').innerText = act.desc;
+        if(this.userRole === 'master') document.getElementById('masterActivityControls').classList.remove('hidden'); else document.getElementById('masterActivityControls').classList.add('hidden');
+        this.renderClaimList(); app.showModal('activityModal');
+    },
+    renderClaimList: function() {
+        const act = this.activities.find(a => a.id === document.getElementById('actId').value); if(!act) return;
+        const search = document.getElementById('claimSearch').value.toLowerCase(); const claimedIds = act.claimed || [];
+        document.getElementById('claimCount').innerText = claimedIds.length; document.getElementById('totalMemberCount').innerText = this.members.length;
+        const sorted = [...this.members].sort((a, b) => {
+            const aC = claimedIds.includes(a.id), bC = claimedIds.includes(b.id);
+            if (aC === bC) return 0; return aC ? -1 : 1;
+        });
+        document.getElementById('claimListGrid').innerHTML = sorted.filter(m => (m.gameName+m.lineName).toLowerCase().includes(search)).map(m => {
+            const isC = claimedIds.includes(m.id);
+            return `<div class="border rounded-xl p-2 flex items-center justify-between transition-all duration-300 cursor-pointer ${isC?'bg-pink-50 border-pink-200 shadow-md':'bg-white border-slate-100 opacity-60 grayscale hover:grayscale-0'}" onclick="app.toggleClaim('${m.id}')"><div class="min-w-0"><div class="font-bold text-slate-700 text-sm truncate">${m.gameName}</div><div class="text-[10px] text-slate-400 truncate">${m.lineName}</div></div><div class="w-8 h-8 rounded-full flex items-center justify-center text-sm ${isC?'bg-pink-500 text-white':'bg-slate-200 text-slate-400'} transition-all duration-300 ${isC?'animate-jelly':''}"><i class="fas ${isC?'fa-check':'fa-gift'}"></i></div></div>`;
+        }).join('');
+    },
+    toggleClaim: async function(memberId) {
+        const actId = document.getElementById('actId').value; const act = this.activities.find(a => a.id === actId); if(!act) return;
+        let newClaimed = [...(act.claimed || [])];
+        if (newClaimed.includes(memberId)) newClaimed = newClaimed.filter(id => id !== memberId); else newClaimed.push(memberId);
+        act.claimed = newClaimed; this.renderClaimList();
+        try { await this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data').collection(this.collectionActivities).doc(actId).update({ claimed: newClaimed }); } 
+        catch(e) { alert("領取狀態更新失敗"); }
+    },
+
+    // ... (UI Helpers & Standard Functions) ...
+    loadHistory: function() { if(this.mode==='demo') try { this.history = JSON.parse(localStorage.getItem('row_mod_history')||"[]"); } catch(e) {} },
+    showHistoryModal: function() { if(!['master','admin'].includes(this.userRole)) return; this.loadHistory(); document.getElementById('historyList').innerHTML = this.history.map(l => `<div class="p-3 bg-slate-50 border rounded-lg mb-2 text-xs"><b>${l.action}</b> ${l.details}</div>`).join(''); app.showModal('historyModal'); },
+    openLoginModal: function() { if(this.userRole!=='guest'){ if(confirm("登出?")){this.userRole='guest';localStorage.removeItem('row_user_role');this.updateAdminUI();} } else { document.getElementById('loginForm').reset(); app.showModal('loginModal'); } },
+    handleLogin: function() { 
+        const u = document.getElementById('loginUser').value, p = document.getElementById('loginPass').value;
+        if(p!=='123456') return alert("密碼錯誤");
+        if(u==='poppy') this.userRole='master'; else if(u==='yuan') this.userRole='admin'; else if(u==='commander') this.userRole='commander'; else return alert("帳號錯誤");
+        localStorage.setItem('row_user_role', this.userRole); app.closeModal('loginModal'); this.updateAdminUI();
     },
     updateAdminUI: function() {
-        const btn = document.getElementById('adminToggleBtn'); const adminControls = document.getElementById('adminControls');
-        if(this.userRole !== 'guest') { btn.classList.add('admin-mode-on', 'text-blue-600'); btn.innerHTML = '<i class="fas fa-sign-out-alt"></i>'; } 
-        else { btn.classList.remove('admin-mode-on', 'text-blue-600'); btn.innerHTML = '<i class="fas fa-user-shield"></i>'; }
-        if (['master', 'admin'].includes(this.userRole)) adminControls.classList.remove('hidden'); else adminControls.classList.add('hidden');
-        this.render();
-    },
-    switchTab: function(tab) {
-        this.currentTab = tab;
-        document.getElementById('view-home').classList.toggle('hidden', tab !== 'home');
-        document.getElementById('view-members').classList.toggle('hidden', tab !== 'members');
-        document.getElementById('view-groups').classList.toggle('hidden', tab !== 'gvg' && tab !== 'groups');
-        document.getElementById('nav-container').classList.toggle('hidden', tab === 'home');
-        document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
-        document.getElementById('tab-' + tab)?.classList.add('active');
-        if(tab === 'gvg') { document.getElementById('groupViewTitle').innerText = 'GVG 攻城戰分組'; document.getElementById('squadModalTitle').innerText = 'GVG 分組管理'; } 
-        else if(tab === 'groups') { document.getElementById('groupViewTitle').innerText = '固定團列表'; document.getElementById('squadModalTitle').innerText = '固定團管理'; }
-        this.render();
-    },
-    handleMainAction: function() { 
-        if(this.currentTab === 'members') this.openAddModal(); 
-        else if(this.currentTab === 'gvg' || this.currentTab === 'groups') {
-            if(['master', 'admin', 'commander'].includes(this.userRole)) this.openSquadModal(); else alert("權限不足");
-        }
-    },
-
-    saveMemberData: async function() {
-        const id = document.getElementById('editId').value;
-        const gameName = document.getElementById('gameName').value.trim();
-        const lineName = document.getElementById('lineName').value.trim();
-        if (!gameName || !lineName) { alert("請輸入完整資料"); return; }
-
-        let mainClass = "";
-        const input = document.getElementById('subJobInput');
-        const select = document.getElementById('subJobSelect');
-        if (!input.classList.contains('hidden')) mainClass = input.value; else mainClass = select.value;
-        if (!mainClass) mainClass = "待定";
+        const btn = document.getElementById('adminToggleBtn');
+        if(this.userRole!=='guest') { btn.classList.add('text-blue-600'); btn.innerHTML='<i class="fas fa-sign-out-alt"></i>'; document.getElementById('adminControls').classList.remove('hidden'); }
+        else { btn.classList.remove('text-blue-600'); btn.innerHTML='<i class="fas fa-user-shield"></i>'; document.getElementById('adminControls').classList.add('hidden'); }
         
+        const actBtn = document.getElementById('btn-add-activity');
+        if(actBtn) actBtn.classList.toggle('hidden', this.userRole !== 'master');
+        
+        // Main Action Button Logic
+        const mainBtn = document.getElementById('mainActionBtn');
+        if(this.currentTab === 'activities') mainBtn.classList.toggle('hidden', this.userRole !== 'master');
+        else mainBtn.classList.remove('hidden');
+
+        this.render();
+    },
+    switchTab: function(t) {
+        this.currentTab = t;
+        ['home','members','groups','activities'].forEach(v => document.getElementById('view-'+v).classList.add('hidden'));
+        document.getElementById('view-'+t).classList.remove('hidden');
+        document.getElementById('nav-container').classList.toggle('hidden', t==='home');
+        document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
+        document.getElementById('tab-'+t)?.classList.add('active');
+        if(t==='gvg'||t==='groups') document.getElementById('groupSearchInput').value = '';
+        this.updateAdminUI();
+    },
+    handleMainAction: function() {
+        if(this.currentTab === 'members') this.openAddModal();
+        else if(this.currentTab === 'activities') { if(this.userRole==='master') this.openActivityEditModal(); }
+        else if(['master','admin','commander'].includes(this.userRole)) this.openSquadModal();
+    },
+    saveMemberData: async function() {
+        const id = document.getElementById('editId').value, gameName = document.getElementById('gameName').value.trim(), lineName = document.getElementById('lineName').value.trim();
+        if(!gameName || !lineName) return alert("請輸入完整資料");
         const member = { 
-            lineName: lineName, gameName: gameName, mainClass: mainClass, 
+            lineName, gameName, 
+            mainClass: document.getElementById('subJobInput').classList.contains('hidden') ? document.getElementById('subJobSelect').value : document.getElementById('subJobInput').value || "待定",
             role: document.getElementById('role').value, rank: document.getElementById('rank').value, intro: document.getElementById('intro').value 
         };
-        
-        try {
-            if (id) { await this.updateMember(id, member); } 
-            else { await this.addMember(member); }
-            this.closeModal('editModal');
-        } catch(e) { console.error(e); alert("儲存失敗"); }
+        try { if(id) await this.updateMember(id, member); else await this.addMember(member); app.closeModal('editModal'); } catch(e){alert("儲存失敗");}
     },
-
-    // =======================================================
-    // ** 【修復項目】App.addMember 函式 **
-    // 新增成員時，自動加上伺服器時間戳記 (serverTimestamp)
-    // =======================================================
-    addMember: async function(member) {
-        if (this.mode === 'firebase') { 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            // 加上 createdAt 時間戳記
-            const newDoc = {
-                ...member,
-                createdAt: firebase.firestore.FieldValue.serverTimestamp() 
-            };
-            await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).add(newDoc); 
-        } 
-        else { 
-            member.id = 'm_' + Date.now(); 
-            member.createdAt = Date.now(); // Demo 模式時間
-            this.members.push(member); 
-            this.members = this.sortMembers(this.members); 
-            this.saveLocal(); 
-        }
+    addMember: async function(m) {
+        if(this.mode==='firebase') await this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data').collection(this.collectionMembers).add({...m, createdAt: firebase.firestore.FieldValue.serverTimestamp()});
+        else { m.id='m_'+Date.now(); m.createdAt=Date.now(); this.members.push(m); this.members=this.sortMembers(this.members); this.saveLocal(); }
     },
-
-    updateMember: async function(id, member) {
-        if (this.mode === 'firebase') { 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            const docRef = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(id);
-            try { await docRef.update(member); } 
-            catch (error) {
-                if (error.code === 'not-found' || error.message.includes('No document')) {
-                     // 如果找不到文件，改為 set，並補上時間戳記
-                     await docRef.set({ ...member, createdAt: firebase.firestore.FieldValue.serverTimestamp() }); 
-                } else { throw error; }
-            }
-        } 
-        else { 
-            const idx = this.members.findIndex(d => d.id === id); 
-            if (idx !== -1) { this.members[idx] = { ...this.members[idx], ...member }; this.saveLocal(); } 
-        }
+    updateMember: async function(id, m) {
+        if(this.mode==='firebase') {
+            const ref = this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data').collection(this.collectionMembers).doc(id);
+            try { await ref.update(m); } catch(e) { if(e.code==='not-found') await ref.set({...m, createdAt: firebase.firestore.FieldValue.serverTimestamp()}); }
+        } else { const i=this.members.findIndex(x=>x.id===id); if(i!==-1){this.members[i]={...this.members[i],...m}; this.saveLocal();} }
     },
-
     deleteMember: async function(id) {
-        if (!confirm("確定要刪除這位成員嗎？")) return;
-        try {
-            if (this.mode === 'firebase') { 
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-                const docRef = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
-                const batch = this.db.batch();
-                batch.delete(docRef.collection(this.collectionMembers).doc(id)); 
-                const groupsSnap = await docRef.collection(this.collectionGroups).get(); 
-                groupsSnap.forEach(groupDoc => {
-                    const groupData = groupDoc.data();
-                    const filtered = (groupData.members || []).filter(m => (typeof m === 'string' ? m : m.id) !== id);
-                    if (filtered.length !== (groupData.members || []).length) batch.update(groupDoc.ref, { members: filtered });
-                });
-                await batch.commit();
-            } else { 
-                this.members = this.members.filter(d => d.id !== id); 
-                this.groups.forEach(g => { g.members = g.members.filter(mid => (typeof mid === 'string' ? mid : mid.id) !== id); }); 
-                this.saveLocal(); 
-            }
-            this.closeModal('editModal');
-        } catch(e) { console.error(e); alert("刪除失敗"); }
+        if(!confirm("刪除?")) return;
+        if(this.mode==='firebase') {
+            const d = this.db.collection('artifacts').doc(typeof __app_id!=='undefined'?__app_id:'row-guild-app').collection('public').doc('data');
+            const b = this.db.batch(); b.delete(d.collection(this.collectionMembers).doc(id));
+            (await d.collection(this.collectionGroups).get()).forEach(g => {
+                const m = (g.data().members||[]).filter(x => (typeof x==='string'?x:x.id)!==id);
+                if(m.length!==(g.data().members||[]).length) b.update(g.ref, {members: m});
+            });
+            await b.commit();
+        } else { this.members=this.members.filter(x=>x.id!==id); this.saveLocal(); }
+        app.closeModal('editModal');
     },
-
-    // ... (saveSquad, deleteSquad, toggleMemberStatus, render 保持不變，請確保包含) ...
+    // ... (Other helpers: saveSquad, deleteSquad, toggleMemberStatus, createCardHTML, etc. kept same as last working version) ...
     saveSquad: async function() {
         if (!['master', 'admin', 'commander'].includes(this.userRole)) { alert("權限不足"); return; }
         const id = document.getElementById('squadId').value;
@@ -484,7 +385,6 @@ const App = {
         const note = document.getElementById('squadNote').value;
         if(!name) { alert("請輸入隊伍名稱"); return; }
         const squadData = { name, note, members: [...this.currentSquadMembers], type: this.currentTab === 'gvg' ? 'gvg' : 'misc' };
-        
         try {
             if (this.mode === 'firebase') { 
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
@@ -521,35 +421,44 @@ const App = {
         } else { this.saveLocal(); }
         this.renderSquads();
     },
-    render: function() {
-        if (this.currentTab === 'members') this.renderMembers();
-        else if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.renderSquads();
+    renderSquads: function() {
+        const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
+        const search = document.getElementById('groupSearchInput').value.toLowerCase();
+        let canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
+        document.getElementById('adminWarning')?.classList.toggle('hidden', !(!canEdit && type === 'gvg'));
+        let visibleGroups = this.groups.filter(g => (g.type || 'gvg') === type);
+        if (search) {
+            visibleGroups = visibleGroups.filter(g => {
+                if (g.name.toLowerCase().includes(search)) return true;
+                return g.members.some(m => {
+                    const id = typeof m === 'string' ? m : m.id;
+                    const mem = this.members.find(x => x.id === id);
+                    return mem && (mem.gameName.toLowerCase().includes(search) || mem.mainClass.toLowerCase().includes(search));
+                });
+            });
+        }
+        const grid = document.getElementById('squadGrid');
+        if (visibleGroups.length === 0) { grid.innerHTML = ''; document.getElementById('noSquadsMsg').classList.remove('hidden'); return; }
+        document.getElementById('noSquadsMsg').classList.add('hidden');
+        grid.innerHTML = visibleGroups.map(group => {
+            const list = (group.members || []).map(m => {
+                const id = typeof m === 'string' ? m : m.id;
+                const status = typeof m === 'string' ? 'pending' : (m.status || 'pending');
+                const mem = this.members.find(x => x.id === id);
+                if(!mem) return '';
+                const roleClass = mem.role.includes('輸出')?'role-badge-dps':mem.role.includes('坦')?'role-badge-tank':mem.role.includes('輔助')?'role-badge-sup':'role-badge-pending';
+                const statusIcon = status==='confirmed'?'<i class="fas fa-check-circle status-confirmed"></i>':'<i class="fas fa-circle-xmark status-pending"></i>';
+                return `<div class="flex items-center justify-between text-sm py-2 border-b border-slate-200 last:border-0 hover:bg-slate-50 px-3 transition"><div class="flex items-center gap-2 min-w-0"><span class="${roleClass} text-xs">${mem.role}</span><span class="text-slate-800 font-bold truncate">${mem.gameName}</span></div><div class="flex items-center gap-3"><span class="text-xs text-slate-500 font-mono">${mem.mainClass.replace(/\(.*\)/,'')}</span>${type==='gvg'?`<div class="text-lg cursor-pointer hover:scale-110 transition" onclick="event.stopPropagation(); app.toggleMemberStatus('${group.id}', '${mem.id}')">${statusIcon}</div>`:''}</div></div>`;
+            }).join('');
+            const confirmedCount = (group.members||[]).filter(m => (typeof m !== 'string' && m.status === 'confirmed')).length;
+            const statusText = type === 'gvg' ? `<div class="font-bold text-sm ${confirmedCount===5?'text-green-600':'text-red-500'}">戰鬥成員: ${confirmedCount}/5</div>` : `<div class="text-[10px] text-slate-400">成員: ${group.members.length}</div>`;
+            const editBtn = canEdit ? `<button onclick="app.openSquadModal('${group.id}')" class="text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-cog"></i></button>` : '';
+            return `<div class="${type==='gvg'?'squad-card-gvg':'bg-white rounded-xl shadow-sm border border-blue-100'} flex flex-col h-full overflow-hidden"><div class="${type==='gvg'?'header squad-card-gvg-header':'bg-blue-50 p-4 border-b border-blue-100'} p-4 flex justify-between items-center rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center"><button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2"><i class="fas fa-copy"></i></button>${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list}</div><div class="bg-white p-3 border-t border-slate-100 flex justify-end items-center shrink-0">${statusText}</div></div>`;
+        }).join('');
     },
-    renderMembers: function() {
-        const grid = document.getElementById('memberGrid');
-        const searchVal = document.getElementById('searchInput').value.toLowerCase();
-        let filtered = this.members.filter(item => {
-            const matchText = (item.lineName + item.gameName + item.mainClass + item.role + (item.intro||"")).toLowerCase().includes(searchVal);
-            const matchRole = this.currentFilter === 'all' || item.role.includes(this.currentFilter) || (this.currentFilter === '坦' && item.mainClass.includes('坦'));
-            const matchJob = this.currentJobFilter === 'all' || (item.mainClass||"").startsWith(this.currentJobFilter);
-            return matchText && matchRole && matchJob;
-        });
-        document.getElementById('memberCount').innerText = `Total: ${filtered.length}`;
-        document.getElementById('stat-dps').innerText = this.members.filter(d => d.role.includes('輸出')).length;
-        document.getElementById('stat-sup').innerText = this.members.filter(d => d.role.includes('輔助')).length;
-        document.getElementById('stat-tank').innerText = this.members.filter(d => d.role.includes('坦')).length;
-        grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
-    },
-
-    // =======================================================
-    // ** 【最終修復】App.createCardHTML 函式 **
-    // 依據「排序後的順序」自動產生序號 (#01, #02...)
-    // 這樣刪除中間的人，後面的人會自動遞補號碼
-    // =======================================================
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
         const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
-        
         let rankBadge = '';
         if(item.rank === '會長') rankBadge = `<span class="rank-badge rank-master">會長</span>`;
         else if(item.rank === '指揮官') rankBadge = `<span class="rank-badge rank-commander">指揮官</span>`;
@@ -561,11 +470,7 @@ const App = {
             return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`;
         }).join('');
         
-        // --- 動態序號邏輯：使用列表 index + 1 ---
-        // 解決「取消星星符」並「依照新增順序排列」且「刪除後自動遞補」的需求
         const displayNo = `#${(idx + 1).toString().padStart(2, '0')}`;
-        // -------------------------
-
         const getRoleBadge = (r) => {
             if (r.includes('輸出')) return `<span class="tag tag-dps">${r}</span>`;
             else if (r.includes('坦')) return `<span class="tag tag-tank">${r}</span>`;
@@ -605,25 +510,20 @@ const App = {
             </div>
         `;
     },
-
     copyText: function(el, text) { navigator.clipboard.writeText(text).then(() => { el.classList.add('copied'); setTimeout(() => el.classList.remove('copied'), 1500); }); },
     copySquadList: function(groupId) {
         const group = this.groups.find(g => g.id === (groupId || document.getElementById('squadId').value)); if(!group) return;
         const names = (group.members||[]).map(m => { const id = typeof m === 'string' ? m : m.id; const mem = this.members.find(x => x.id === id); return mem ? mem.gameName : 'Unknown'; });
         navigator.clipboard.writeText(`【${group.name}】 ${names.join(', ')}`).then(() => alert("已複製！"));
     },
-    
     openAddModal: function() { 
         document.getElementById('memberForm').reset(); document.getElementById('editId').value = ''; document.getElementById('deleteBtnContainer').innerHTML = ''; 
         document.getElementById('baseJobSelect').value = ""; this.updateBaseJobSelect(); this.updateSubJobSelect(); 
         document.getElementById('subJobSelectWrapper').classList.remove('hidden'); document.getElementById('subJobInput').classList.add('hidden');
-        
-        // ** 新增時鎖定職位 **
         const rankSelect = document.getElementById('rank'); const lockIcon = document.getElementById('rankLockIcon');
         rankSelect.value = '成員';
         if(this.userRole === 'master') { rankSelect.disabled = false; rankSelect.classList.remove('locked-field'); lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { rankSelect.disabled = true; rankSelect.classList.add('locked-field'); lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
-
         app.showModal('editModal'); 
     },
     openEditModal: function(id) {
@@ -631,13 +531,11 @@ const App = {
         document.getElementById('editId').value = item.id;
         document.getElementById('lineName').value = item.lineName; document.getElementById('gameName').value = item.gameName;
         document.getElementById('role').value = item.role.split(/[ ,]/)[0]||'待定'; document.getElementById('rank').value = item.rank || '成員'; document.getElementById('intro').value = item.intro;
-        
         const baseSelect = document.getElementById('baseJobSelect'); const subInput = document.getElementById('subJobInput');
         this.updateBaseJobSelect();
         const match = item.mainClass.match(/^([^(]+)\(([^)]+)\)$/);
         const canEdit = ['master', 'admin'].includes(this.userRole);
         document.getElementById('toggleJobBtn').classList.toggle('hidden', !canEdit);
-
         if (match && JOB_STRUCTURE[match[1]]) {
             baseSelect.value = match[1]; this.updateSubJobSelect(); document.getElementById('subJobSelect').value = item.mainClass;
             subInput.classList.add('hidden'); document.getElementById('subJobSelectWrapper').classList.remove('hidden');
@@ -647,11 +545,9 @@ const App = {
                 subInput.classList.remove('hidden'); document.getElementById('subJobSelectWrapper').classList.add('hidden'); 
             } else { baseSelect.value = ""; this.updateSubJobSelect(); }
         }
-        
         const rankSelect = document.getElementById('rank'); const lockIcon = document.getElementById('rankLockIcon');
         if(this.userRole === 'master') { rankSelect.disabled = false; rankSelect.classList.remove('locked-field'); lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { rankSelect.disabled = true; rankSelect.classList.add('locked-field'); lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
-        
         if (['master', 'admin'].includes(this.userRole)) document.getElementById('deleteBtnContainer').innerHTML = `<button type="button" onclick="app.deleteMember('${item.id}')" class="text-red-500 text-sm hover:underline">刪除成員</button>`;
         else document.getElementById('deleteBtnContainer').innerHTML = '';
         app.showModal('editModal');
