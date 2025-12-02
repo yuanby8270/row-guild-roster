@@ -402,19 +402,34 @@ const App = {
                 if (isGVG) {
                     if (m.status === 'leave') rowClass = "row-leave";
 
-                    if (canEdit) {
-                        let subSelectUI = "";
-                        if (m.status === 'leave') {
-                            const otherMembers = this.members.filter(x => !groupMembers.some(gm => gm.id === x.id) || x.id === m.subId); 
+                    // GVG 開放所有人操作燈號
+                    // 1. 替補顯示區域 (Admin: 選單, Guest: 文字)
+                    let subUI = "";
+                    if (m.status === 'leave') {
+                        if (canEdit) {
+                            // Admin: 下拉選單
+                            const otherMembers = this.members.filter(x => !groupMembers.some(gm => gm.id === x.id) || x.id === m.subId);
                             const options = otherMembers.map(om => `<option value="${om.id}" ${om.id === m.subId ? 'selected' : ''}>${om.gameName}</option>`).join('');
-                            subSelectUI = `<select class="sub-select" onchange="app.updateGvgSub('${group.id}', '${m.id}', this.value)" onclick="event.stopPropagation()"><option value="">選擇替補...</option>${options}</select>`;
+                            subUI = `<select class="sub-select" onchange="app.updateGvgSub('${group.id}', '${m.id}', this.value)" onclick="event.stopPropagation()"><option value="">選擇替補...</option>${options}</select>`;
+                        } else if (m.subId) {
+                            // Guest: 純文字顯示替補是誰
+                            const subMem = this.members.find(x => x.id === m.subId);
+                            if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`;
                         }
-                        actionUI = `<div class="flex items-center gap-1">${subSelectUI}<div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}" title="請假" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'leave')"></div><div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}" title="狀態" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div></div>`;
-                    } else {
-                        let statusText = m.status === 'ready' ? '<span class="text-green-500 text-xs font-bold">Ready</span>' : m.status === 'leave' ? '<span class="text-yellow-500 text-xs font-bold">請假</span>' : '<span class="text-red-400 text-xs">...</span>';
-                        if (m.status === 'leave' && m.subId) { const subMem = this.members.find(x => x.id === m.subId); if(subMem) statusText += ` <span class="text-blue-500 text-xs">⇋ ${subMem.gameName}</span>`; }
-                        actionUI = `<div>${statusText}</div>`;
                     }
+
+                    // 2. 燈號區域 (所有人皆可操作)
+                    actionUI = `
+                        <div class="flex items-center gap-1">
+                            ${subUI}
+                            <div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}"
+                                 title="請假 (Leave)"
+                                 onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'leave')"></div>
+                            <div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}"
+                                 title="狀態"
+                                 onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div>
+                        </div>
+                    `;
                 } else {
                     actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`;
                 }
@@ -431,7 +446,6 @@ const App = {
             if (isGVG) {
                 const readyCount = groupMembers.filter(m => m.status === 'ready').length;
                 const leaveCount = groupMembers.filter(m => m.status === 'leave').length;
-                // 顯示隊長
                 const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
                 footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500">
                     <span class="text-blue-600">👑 隊長: ${leader}</span>
@@ -445,7 +459,7 @@ const App = {
     },
 
     toggleGvgStatus: function(groupId, memberId, action) {
-        if (!['master', 'admin', 'commander'].includes(this.userRole)) return;
+        // 開放權限：移除管理者檢查，讓所有人皆可操作
         const group = this.groups.find(g => g.id === groupId); if(!group) return;
         const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (index === -1) return;
@@ -522,13 +536,10 @@ const App = {
             document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-500 text-sm hover:underline">解散</button>`;
             
             this.currentSquadMembers = g.members.map(m => typeof m === 'string' ? {id: m, status: 'pending'} : m);
-            // 關鍵：先渲染選單（包含隊長選單），再設定值
             this.renderSquadMemberSelect(); 
             
             const leaderSelect = document.getElementById('squadLeader');
             if(leaderSelect) {
-                // 如果目前的隊長ID不在候選名單中（可能被移除了），則重置
-                // 但 updateLeaderOptions 已經處理了清單產生，這裡我們強制選取
                 leaderSelect.value = g.leaderId || "";
             }
         } else {
@@ -588,19 +599,16 @@ const App = {
             </label>`;
         }).join('');
 
-        // 核心修正：每次渲染成員列表時，同步更新隊長選單
         this.updateLeaderOptions();
     },
 
-    // (NEW) 更新隊長選單：只有被選中的成員才能當隊長
     updateLeaderOptions: function() {
         const select = document.getElementById('squadLeader');
         if (!select) return;
         
-        const currentVal = select.value; // 記住當前選的值
+        const currentVal = select.value; 
         select.innerHTML = '<option value="">未指定</option>';
         
-        // 遍歷已勾選的成員
         this.currentSquadMembers.forEach(sm => {
             const mid = (typeof sm === 'string') ? sm : sm.id;
             const mem = this.members.find(m => m.id === mid);
@@ -612,7 +620,6 @@ const App = {
             }
         });
 
-        // 如果之前選的人還在，就保持選中；否則重置
         if (currentVal && this.currentSquadMembers.some(sm => (typeof sm === 'string' ? sm : sm.id) === currentVal)) {
             select.value = currentVal;
         } else {
@@ -626,13 +633,13 @@ const App = {
         const type = document.getElementById('squadType').value;
         const name = document.getElementById('squadName').value;
         const note = document.getElementById('squadNote').value;
-        const leaderId = document.getElementById('squadLeader').value; // (NEW) 讀取隊長ID
+        const leaderId = document.getElementById('squadLeader').value; 
         const selectedMembers = [...this.currentSquadMembers];
         
         if(!name) { alert("請輸入隊伍名稱"); return; }
         if (type === 'gvg' && selectedMembers.length !== 5) { alert("GVG 隊伍建議為 5 人 (目前: " + selectedMembers.length + ")"); }
         
-        const squadData = { name, note, members: selectedMembers, type, leaderId }; // (NEW) 存入 leaderId
+        const squadData = { name, note, members: selectedMembers, type, leaderId }; 
         if (id) {
             if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).update(squadData); 
             else { const idx = this.groups.findIndex(g => g.id === id); if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal('groups'); } }
