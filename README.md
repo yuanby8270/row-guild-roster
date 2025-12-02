@@ -1,24 +1,19 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>RO:W 公會名冊 | 躺著不想動</title>
+
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#A3D8F4">
 
     <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Varela+Round&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore-compat.js"></script>
     
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-
     <script>
         tailwind.config = {
             theme: {
@@ -154,22 +149,17 @@
 
         /* 修正 SVG 標題跑位 (Layout Shift Fix) */
         .aspect-2-1 {
-            /* 使用 Padding Hack 設置相對位置 */
             position: relative;
             width: 100%;
-            /* 由於 SVG 的 viewBox 是 300x150，所以高度是寬度的 50% */
-            padding-bottom: 50%; 
+            padding-bottom: 50%; /* 300x150 比例 */
         }
         .aspect-2-1 svg {
-            /* 讓 SVG 絕對定位並填滿預留的空間 */
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
         }
-        /* END: 修正 SVG 標題跑位的修改 */
-
         .mascot-wrapper { position: relative; width: 280px; height: 200px; margin: 0 auto; z-index: 10; }
         .mascot-container { transform: scale(1.05); } 
 
@@ -275,10 +265,10 @@
         .status-confirmed { color: #34D399; } /* 綠色 */
         .status-pending { color: #F87171; } /* 紅色 */
 
-         /* 確保 Font Awesome 圖示正確顯示 */
-        .fa-cog, .fa-book-open, .fa-crosshairs, .fa-users {
+         /* 確保 Font Awesome 圖示正確顯示 (優化) */
+        .fa-cog, .fa-book-open, .fa-crosshairs, .fa-users, .fa-plus, .fa-user-shield {
              font-family: 'Font Awesome 6 Free';
-             font-weight: 900; /* 使用 solid 風格的權重 */
+             font-weight: 900; 
         }
     </style>
 </head>
@@ -286,40 +276,41 @@
 
     <div class="bg-clouds"></div>
 
-    <nav class="bg-white/90 backdrop-blur border-b border-white/50 sticky top-0 z-50 px-4 py-3 flex justify-between items-center shadow-sm safe-area-top">
-        <div class="flex items-center space-x-3 cursor-pointer" onclick="app.switchTab('home')">
-            <div class="w-9 h-9 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-blue-200 border border-white font-cute">
-                RO
-            </div>
-            <div>
-                <h1 class="text-lg font-black text-slate-700 leading-tight tracking-tight font-cute">躺著不想動</h1>
-            </div>
-        </div>
-        <div class="flex items-center space-x-2">
-            <button onclick="app.openLoginModal()" id="adminToggleBtn" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl border border-transparent" title="管理登入"><i class="fas fa-user-shield"></i></button>
-            <div id="adminControls" class="flex items-center space-x-2 hidden">
-                <div class="relative group">
-                    <button class="p-2 text-slate-500 hover:text-blue-600 transition bg-blue-50 rounded-lg" title="下載/匯出"><i class="fas fa-download"></i></button>
-                    <div class="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-[60]">
-                        <button onclick="app.downloadSelf()" class="w-full text-left px-4 py-3 hover:bg-slate-50 text-sm text-slate-700 flex items-center"><i class="fas fa-file-code mr-2 text-blue-500"></i> 下載本網頁</button>
-                        <button onclick="app.exportCSV()" class="w-full text-left px-4 py-3 hover:bg-slate-50 text-sm text-slate-700 flex items-center border-t border-slate-100"><i class="fas fa-file-csv mr-2 text-green-500"></i> 匯出 CSV</button>
-                    </div>
+    <header class="sticky top-0 z-50 w-full shadow-md">
+        <nav class="bg-white/90 backdrop-blur border-b border-white/50 px-4 py-3 flex justify-between items-center safe-area-top">
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="app.switchTab('home')">
+                <div class="w-9 h-9 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-md shadow-blue-200 border border-white font-cute">
+                    RO
                 </div>
-                <button onclick="app.showModal('configModal')" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl" title="設定"><i class="fas fa-cog"></i></button>
+                <div>
+                    <h1 class="text-lg font-black text-slate-700 leading-tight tracking-tight font-cute">躺著不想動</h1>
+                </div>
             </div>
-            <button onclick="app.handleMainAction()" class="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 px-3 py-2 rounded-xl font-bold transition flex items-center text-sm transform active:scale-95 border-b-4 border-blue-700" title="新增"><i class="fas fa-plus"></i></button>
-        </div>
-    </nav>
+            <div class="flex items-center space-x-2">
+                <button onclick="app.openLoginModal()" id="adminToggleBtn" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl border border-transparent" title="管理登入"><i class="fas fa-user-shield"></i></button>
+                <div id="adminControls" class="flex items-center space-x-2 hidden">
+                    <div class="relative group">
+                        <button class="p-2 text-slate-500 hover:text-blue-600 transition bg-blue-50 rounded-lg" title="下載/匯出"><i class="fas fa-download"></i></button>
+                        <div class="absolute right-0 top-full mt-2 w-48 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden hidden group-hover:block z-[60]">
+                            <button onclick="app.downloadSelf()" class="w-full text-left px-4 py-3 hover:bg-slate-50 text-sm text-slate-700 flex items-center"><i class="fas fa-file-code mr-2 text-blue-500"></i> 下載本網頁</button>
+                            <button onclick="app.exportCSV()" class="w-full text-left px-4 py-3 hover:bg-slate-50 text-sm text-slate-700 flex items-center border-t border-slate-100"><i class="fas fa-file-csv mr-2 text-green-500"></i> 匯出 CSV</button>
+                        </div>
+                    </div>
+                    <button onclick="app.showModal('configModal')" class="p-2 text-slate-400 hover:text-blue-500 transition rounded-xl" title="設定"><i class="fas fa-cog"></i></button>
+                </div>
+                <button onclick="app.handleMainAction()" class="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-200 px-3 py-2 rounded-xl font-bold transition flex items-center text-sm transform active:scale-95 border-b-4 border-blue-700" title="新增"><i class="fas fa-plus"></i></button>
+            </div>
+        </nav>
 
-    <div class="bg-white/30 backdrop-blur border-b border-white/40 sticky top-[60px] z-40" id="nav-container">
-        <div class="container mx-auto px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide">
-            <button onclick="app.switchTab('home')" id="tab-home" class="nav-pill"><i class="fas fa-home mr-1"></i> 首頁</button>
-            <button onclick="app.switchTab('members')" id="tab-members" class="nav-pill"><i class="fas fa-users mr-1"></i> 名冊</button>
-            <button onclick="app.switchTab('gvg')" id="tab-gvg" class="nav-pill"><i class="fas fa-shield-alt mr-1"></i> GVG</button>
-            <button onclick="app.switchTab('groups')" id="tab-groups" class="nav-pill"><i class="fas fa-campground mr-1"></i> 固定團</button>
+        <div class="bg-white/30 backdrop-blur border-b border-white/40 z-40" id="nav-container">
+            <div class="container mx-auto px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide">
+                <button onclick="app.switchTab('home')" id="tab-home" class="nav-pill"><i class="fas fa-home mr-1"></i> 首頁</button>
+                <button onclick="app.switchTab('members')" id="tab-members" class="nav-pill"><i class="fas fa-users mr-1"></i> 名冊</button>
+                <button onclick="app.switchTab('gvg')" id="tab-gvg" class="nav-pill"><i class="fas fa-shield-alt mr-1"></i> GVG</button>
+                <button onclick="app.switchTab('groups')" id="tab-groups" class="nav-pill"><i class="fas fa-campground mr-1"></i> 固定團</button>
+            </div>
         </div>
-    </div>
-
+    </header>
     <main class="flex-grow container mx-auto p-4 md:p-6 space-y-6 max-w-7xl safe-area-bottom">
         
         <div id="view-home" class="animate-fade-in relative">
@@ -621,7 +612,6 @@
             { key: ['刺客', '盜賊'], class: 'bg-job-assassin', icon: 'fa-skull' }, { key: ['流氓'], class: 'bg-job-rogue', icon: 'fa-mask' }
         ];
 
-        // New Job Structure from index.html
         const JOB_STRUCTURE = {
             "騎士": ["龍", "敏爆", "其他"], "十字軍": ["坦", "輸出", "其他"], "鐵匠": ["戰鐵", "鍛造", "其他"], "煉金": ["一般", "其他"],
             "獵人": ["鳥", "陷阱", "AD", "其他"], "詩人": ["輔助", "輸出", "其他"], "舞孃": ["輔助", "輸出", "其他"],
@@ -630,7 +620,6 @@
             "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
         };
         
-        // ORIGINAL DATA PRESERVED
         const SEED_DATA = [
             { id: "m01", lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
             { id: "m02", lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
@@ -733,7 +722,6 @@
                 this.switchTab('home'); 
             },
             
-            // --- Helper for Member Sorting (Requirement 1) ---
             sortMembers: function(membersArray) {
                 return membersArray.sort((a, b) => {
                     const idA = a.id;
@@ -742,12 +730,11 @@
                     const isSeedB = /^m\d{2}$/.test(idB);
                     
                     if (isSeedA && isSeedB) {
-                        return idA.localeCompare(idB); // Sort seed IDs m01 < m02
+                        return idA.localeCompare(idB); 
                     }
-                    if (isSeedA) return -1; // Seed comes first
-                    if (isSeedB) return 1;  // Seed comes first
+                    if (isSeedA) return -1; 
+                    if (isSeedB) return 1;  
                     
-                    // Fallback for new/custom IDs by game name
                     return (a.gameName || '').localeCompare(b.gameName || '');
                 });
             },
@@ -763,7 +750,7 @@
                         const publicData = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
                         publicData.collection(this.collectionMembers).onSnapshot(snap => { 
                             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
-                            this.members = this.sortMembers(arr); // Apply sorting
+                            this.members = this.sortMembers(arr); 
                             if (arr.length === 0 && this.members.length === 0) this.seedFirebaseMembers(); else { this.render(); } 
                         });
                         publicData.collection(this.collectionGroups).onSnapshot(snap => { const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); this.groups = arr; this.render(); });
@@ -775,7 +762,7 @@
                 this.mode = 'demo';
                 const storedMem = localStorage.getItem('row_local_members'); const storedGrp = localStorage.getItem('row_local_groups');
                 const currentVer = localStorage.getItem('row_data_ver');
-                const APP_VER = '27.0'; // Updated Version
+                const APP_VER = '27.0'; 
 
                 if (currentVer !== APP_VER) {
                     this.members = JSON.parse(JSON.stringify(SEED_DATA));
@@ -787,7 +774,7 @@
                     if (storedMem) this.members = JSON.parse(storedMem); else this.members = JSON.parse(JSON.stringify(SEED_DATA));
                     if (storedGrp) this.groups = JSON.parse(storedGrp); else this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
                 }
-                this.members = this.sortMembers(this.members); // Apply sorting
+                this.members = this.sortMembers(this.members); 
                 this.render();
             },
 
@@ -802,12 +789,11 @@
                 if (this.mode === 'demo') { 
                     localStorage.setItem('row_local_members', JSON.stringify(this.members)); 
                     localStorage.setItem('row_local_groups', JSON.stringify(this.groups)); 
-                    localStorage.setItem('row_mod_history', JSON.stringify(this.history)); // Save history
+                    localStorage.setItem('row_mod_history', JSON.stringify(this.history)); 
                     this.render(); 
                 }
             },
             
-            // --- History Logic ---
             loadHistory: function() {
                 if (this.mode === 'demo') {
                     const storedHistory = localStorage.getItem('row_mod_history');
@@ -822,7 +808,7 @@
                     details: details,
                     targetId: targetId || 'N/A'
                 };
-                this.history.unshift(log); // Add to beginning
+                this.history.unshift(log); 
                 if (this.mode === 'demo') {
                     localStorage.setItem('row_mod_history', JSON.stringify(this.history));
                 }
@@ -939,7 +925,6 @@
                 }
             },
 
-            // --- Save Function Reliable ---
             saveMemberData: async function() {
                 const id = document.getElementById('editId').value;
                 let mainClass = "";
@@ -985,7 +970,7 @@
                 else { 
                     member.id = 'm_' + Date.now(); 
                     this.members.push(member); 
-                    this.members = this.sortMembers(this.members); // Re-sort locally
+                    this.members = this.sortMembers(this.members); 
                     this.saveLocal(); 
                 }
             },
@@ -998,7 +983,7 @@
                     const idx = this.members.findIndex(d => d.id === id); 
                     if (idx !== -1) { 
                         this.members[idx] = { ...this.members[idx], ...member }; 
-                        this.members = this.sortMembers(this.members); // Re-sort locally
+                        this.members = this.sortMembers(this.members); 
                         this.saveLocal(); 
                     } 
                 }
@@ -1077,7 +1062,6 @@
                 this.closeModal('squadModal');
             },
 
-            // --- Toggle Status for ALL ---
             toggleMemberStatus: function(groupId, memberId) {
                 const group = this.groups.find(g => g.id === groupId); 
                 if(!group) return;
@@ -1099,7 +1083,7 @@
                 } else { 
                     this.saveLocal(); 
                 }
-                this.renderSquads(); // Force re-render list immediately
+                this.renderSquads(); 
             },
 
             render: function() {
@@ -1191,12 +1175,8 @@
                 
                 let canEdit = true;
                 if (type === 'gvg') {
-                    // GVG only allows Master, Admin, Commander to edit/create
                     canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
                 }
-                
-                // Fixed logic: Group/Misc mode allows non-admin viewing but edit button logic remains
-                // For simplicity, we keep edit button hidden unless authorized
                 
                 if(warningMsg) {
                     if(!canEdit && type === 'gvg') warningMsg.classList.remove('hidden'); 
@@ -1230,7 +1210,6 @@
                         return mem ? { ...mem, status } : null;
                     }).filter(x => x);
 
-                    // Utility to get role and status classes
                     const getRoleClass = (role) => {
                         if (role.includes('輸出')) return 'role-badge-dps';
                         if (role.includes('坦')) return 'role-badge-tank';
@@ -1302,36 +1281,10 @@
                 navigator.clipboard.writeText(text).then(() => alert("已複製隊伍名單！"));
             },
 
-            // --- Toggle Status for ALL ---
-            toggleMemberStatus: function(groupId, memberId) {
-                const group = this.groups.find(g => g.id === groupId); 
-                if(!group) return;
-
-                const memberIndex = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
-                if (memberIndex === -1) return;
-                
-                let memberData = group.members[memberIndex];
-                
-                if (typeof memberData === 'string') memberData = { id: memberData, status: 'confirmed' };
-                else memberData.status = memberData.status === 'confirmed' ? 'pending' : 'confirmed';
-                
-                group.members[memberIndex] = memberData;
-                const squadData = { ...group };
-                
-                if (this.mode === 'firebase') { 
-                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
-                    this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).doc(groupId).update(squadData); 
-                } else { 
-                    this.saveLocal(); 
-                }
-                this.renderSquads(); // Force re-render list immediately
-            },
-
             openAddModal: function() { 
                 document.getElementById('memberForm').reset(); 
                 document.getElementById('editId').value = ''; 
                 document.getElementById('deleteBtnContainer').innerHTML = ''; 
-                // Reset Job selectors
                 document.getElementById('baseJobSelect').value = "";
                 this.updateSubJobSelect();
                 document.getElementById('subJobSelectWrapper').classList.remove('hidden');
@@ -1349,7 +1302,6 @@
                 document.getElementById('rank').value = item.rank || '成員';
                 document.getElementById('intro').value = item.intro;
                 
-                // --- Updated Job Selection Logic ---
                 const baseSelect = document.getElementById('baseJobSelect');
                 const subSelect = document.getElementById('subJobSelect');
                 const subInput = document.getElementById('subJobInput');
@@ -1387,8 +1339,7 @@
                         subSelect.disabled = true; 
                     }
                 }
-                // -----------------------------------
-
+                
                 const rankSelect = document.getElementById('rank');
                 const lockIcon = document.getElementById('rankLockIcon');
                 if(this.userRole === 'master') {
@@ -1459,13 +1410,11 @@
             },
 
             toggleSquadMember: function(id) {
-                // Find by ID, regardless if stored as string or object
                 const index = this.currentSquadMembers.findIndex(m => (typeof m === 'string' ? m : m.id) === id);
                 if (index > -1) { 
                     this.currentSquadMembers.splice(index, 1); 
                 } else { 
                     if (this.currentSquadMembers.length >= 5) return; 
-                    // Add as object to support status
                     this.currentSquadMembers.push({ id: id, status: 'pending' }); 
                 }
                 this.renderSquadMemberSelect();
@@ -1476,20 +1425,16 @@
                 const currentSquadType = this.currentTab === 'gvg' ? 'gvg' : 'misc';
                 const search = document.getElementById('memberSearch').value.toLowerCase();
                 
-                // 1. Calculate occupied IDs in other groups of the same type
                 const occupiedIds = this.groups
                     .filter(g => g.id !== currentSquadId && (g.type || 'gvg') === currentSquadType)
                     .flatMap(g => g.members)
                     .map(m => typeof m === 'string' ? m : m.id)
-                    .filter((value, index, self) => self.indexOf(value) === index); // Unique IDs
+                    .filter((value, index, self) => self.indexOf(value) === index); 
 
-                // 2. Filter available members (exclude occupied members)
                 let availableMembers = this.members.filter(m => !occupiedIds.includes(m.id));
 
-                // 3. Apply search filter
                 const filtered = availableMembers.filter(m => (m.gameName + m.lineName + m.mainClass).toLowerCase().includes(search));
                 
-                // Helper to check if member is selected (must check against currentSquadMembers)
                 const isSelected = (mid) => this.currentSquadMembers.some(sm => (typeof sm === 'string' ? sm : sm.id) === mid);
 
                 filtered.sort((a,b) => (isSelected(a.id) === isSelected(b.id)) ? 0 : isSelected(a.id) ? -1 : 1);
@@ -1503,7 +1448,6 @@
                     const checked = isSelected(m.id);
                     const isDisabled = !checked && isFull;
                     
-                    // Get Job Style/Icon for visual aid in selector
                     const jobName = m.mainClass || '';
                     const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
 
@@ -1557,7 +1501,7 @@
                 localStorage.removeItem('row_firebase_config'); 
                 localStorage.removeItem('row_local_members'); 
                 localStorage.removeItem('row_local_groups'); 
-                localStorage.removeItem('row_mod_history'); // Clear history
+                localStorage.removeItem('row_mod_history'); 
                 location.reload(); 
             }
         };
