@@ -42,8 +42,8 @@ tailwind.config = {
 }
 
 
-// ** 2. 常量與初始數據 (移除 m01~m100 ID，只保留實際成員資料) **
-const DATA_VERSION = "6.0";
+// ** 2. 常量與初始數據 **
+const DATA_VERSION = "6.1"; // 最終穩定版
 const JOB_STYLES = [
     { key: ['騎士'], class: 'bg-job-knight', icon: 'fa-shield-alt' }, { key: ['十字軍'], class: 'bg-job-crusader', icon: 'fa-cross' }, { key: ['鐵匠', '商人'], class: 'bg-job-blacksmith', icon: 'fa-hammer' },
     { key: ['獵人', '弓箭手'], class: 'bg-job-hunter', icon: 'fa-crosshairs' }, { key: ['詩人'], class: 'bg-job-bard', icon: 'fa-music' }, { key: ['煉金'], class: 'bg-job-alchemist', icon: 'fa-flask' },
@@ -60,7 +60,7 @@ const JOB_STRUCTURE = {
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
 
-// 移除 ID (mXX) 欄位，讓 Firebase 重新賦予所有數據唯一的隨機 ID
+// 初始名單 (純數據，無 ID - 讓 Firebase 自動生成)
 const SEED_DATA = [
     { lineName: "poppy🐶", gameName: "YT清燉小羔羊", mainClass: "神官(讚美)", role: "輔助", rank: "會長", intro: "公會唯一清流 出淤泥而不染" },
     { lineName: "#Yuan", gameName: "沐沐", mainClass: "神官(讚美)", role: "輔助", rank: "資料管理員", intro: "" },
@@ -100,7 +100,7 @@ const SEED_DATA = [
     { lineName: "Ryan", gameName: "水鏡是條狗", mainClass: "", role: "待定", rank: "成員", intro: "" },
     { lineName: "兩廣寬", gameName: "新竹房仲兩廣", mainClass: "賢者", role: "輔助", rank: "成員", intro: "" },
     { lineName: "富邦-Shawn(小逸)", gameName: "HsuBoBo", mainClass: "刺客(敏爆)", role: "輸出", rank: "成員", intro: "" },
-    { lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "待領養孤兒" },
+    { lineName: "成成", gameName: "該獵戶已夜梟", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
     { lineName: "魏駿翔", gameName: "歐洲獨角獸", mainClass: "流氓(輸出)", role: "待定", rank: "成員", intro: "" },
     { lineName: "Louie", gameName: "水蜜桃王", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "櫻花表弟" },
     { lineName: "Keith-匠屋空間工作室", gameName: "潘朵拉企鵝", mainClass: "流氓(脫裝)", role: "輸出", rank: "成員", intro: "待領養孤兒, 我喜歡大叔" },
@@ -173,23 +173,42 @@ const App = {
 
         if (typeof firebase !== 'undefined') {
             let config = null;
-            // 優先從硬編碼的 __firebase_config 讀取設定
-            if (typeof __firebase_config !== 'undefined' && __firebase_config) try { config = JSON.parse(__firebase_config); } catch(e) {}
-            // 如果硬編碼沒有，則從本機儲存空間讀取 (這部分現在備用)
-            if (!config) { const stored = localStorage.getItem('row_firebase_config'); if (stored) config = JSON.parse(stored); }
+            // 優化: 加入 try-catch 防止解析錯誤導致崩潰
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try { 
+                    config = JSON.parse(__firebase_config); 
+                } catch(e) { 
+                    console.error("Firebase Config Error:", e);
+                }
+            }
+            if (!config) { 
+                const stored = localStorage.getItem('row_firebase_config'); 
+                if (stored) {
+                    try {
+                        config = JSON.parse(stored);
+                    } catch(e) {
+                        console.error("Local Firebase Config corrupted");
+                        localStorage.removeItem('row_firebase_config');
+                    }
+                }
+            }
             
             if (config) { this.initFirebase(config); } else { this.initDemoMode(); }
-        } else { this.initDemoMode(); }
+        } else { 
+            console.warn("Firebase SDK not found, fallback to Demo.");
+            this.initDemoMode(); 
+        }
         this.setupListeners();
         this.updateAdminUI();
         this.switchTab('home'); 
     },
     
-    // ** 變更：改用遊戲名排序，而非固定 ID **
+    // ** 變更：改用遊戲名排序 **
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            // 主要依據遊戲名 (gameName) 進行排序
-            return (a.gameName || '').localeCompare(b.gameName || '');
+            const nameA = a.gameName || '';
+            const nameB = b.gameName || '';
+            return nameA.localeCompare(nameB);
         });
     },
 
@@ -197,44 +216,84 @@ const App = {
         try {
             if (!firebase.apps.length) firebase.initializeApp(config);
             this.auth = firebase.auth(); this.db = firebase.firestore(); this.mode = 'firebase';
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) await this.auth.signInWithCustomToken(__initial_auth_token); else await this.auth.signInAnonymously();
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
-            const user = this.auth.currentUser;
-            if (user) {
-                const publicData = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
-                publicData.collection(this.collectionMembers).onSnapshot(snap => { 
-                    const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
-                    this.members = this.sortMembers(arr); 
-                    // 這裡檢查 Firebase 集合是否為空
-                    if (snap.size === 0) this.seedFirebaseMembers(); else { this.render(); } 
-                });
-                publicData.collection(this.collectionGroups).onSnapshot(snap => { const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); this.groups = arr; this.render(); });
+            
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await this.auth.signInWithCustomToken(__initial_auth_token);
+                } else {
+                    await this.auth.signInAnonymously();
+                }
+            } catch(authErr) {
+                console.error("Auth failed:", authErr);
             }
-        } catch (e) { console.error("Firebase Init Failed", e); this.initDemoMode(); }
+
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
+            const publicData = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
+            
+            publicData.collection(this.collectionMembers).onSnapshot(snap => { 
+                const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
+                this.members = this.sortMembers(arr); 
+                // 檢查 Firebase 集合是否為空，是則寫入種子數據
+                if (snap.size === 0) this.seedFirebaseMembers(); else { this.render(); } 
+            }, err => {
+                console.error("Firestore Members Error:", err);
+                // 這裡不彈出警示，讓網站保持可視狀態，但功能會受限。
+            });
+
+            publicData.collection(this.collectionGroups).onSnapshot(snap => { 
+                const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
+                this.groups = arr; 
+                this.render(); 
+            }, err => console.error("Firestore Groups Error:", err));
+
+        } catch (e) { 
+            console.error("Firebase Init Failed Completely", e); 
+            this.initDemoMode(); 
+        }
     },
 
     initDemoMode: function() {
         this.mode = 'demo';
-        const storedMem = localStorage.getItem('row_local_members'); const storedGrp = localStorage.getItem('row_local_groups');
-        const currentVer = localStorage.getItem('row_data_ver');
-        const APP_VER = '27.0'; 
+        try {
+            const storedMem = localStorage.getItem('row_local_members'); 
+            const storedGrp = localStorage.getItem('row_local_groups');
+            const currentVer = localStorage.getItem('row_data_ver');
+            const APP_VER = '27.0'; 
 
-        if (currentVer !== APP_VER) {
+            if (currentVer !== APP_VER) {
+                this.members = JSON.parse(JSON.stringify(SEED_DATA));
+                if (storedGrp) {
+                    try { this.groups = JSON.parse(storedGrp); } catch(e) { this.groups = []; }
+                } else {
+                    this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
+                }
+                localStorage.setItem('row_data_ver', APP_VER);
+                this.saveLocal();
+            } else {
+                if (storedMem) {
+                    try { this.members = JSON.parse(storedMem); } catch(e) { this.members = JSON.parse(JSON.stringify(SEED_DATA)); }
+                } else {
+                    this.members = JSON.parse(JSON.stringify(SEED_DATA));
+                }
+                
+                if (storedGrp) {
+                    try { this.groups = JSON.parse(storedGrp); } catch(e) { this.groups = JSON.parse(JSON.stringify(SEED_GROUPS)); }
+                } else {
+                    this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
+                }
+            }
+        } catch(e) {
+            console.error("Demo mode init error, resetting data", e);
             this.members = JSON.parse(JSON.stringify(SEED_DATA));
-            if (storedGrp) this.groups = JSON.parse(storedGrp); else this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
-            
-            localStorage.setItem('row_data_ver', APP_VER);
-            this.saveLocal();
-        } else {
-            if (storedMem) this.members = JSON.parse(storedMem); else this.members = JSON.parse(JSON.stringify(SEED_DATA));
-            if (storedGrp) this.groups = JSON.parse(storedGrp); else this.groups = JSON.parse(JSON.stringify(SEED_GROUPS));
+            this.groups = [];
         }
+        
         this.members = this.sortMembers(this.members); 
         this.render();
     },
 
     // =======================================================
-    // ** 【修復項目】App.seedFirebaseMembers 函式 **
+    // ** App.seedFirebaseMembers 函式 **
     // 確保使用隨機 ID，避免 m01, m02 衝突。
     // =======================================================
     seedFirebaseMembers: async function() {
@@ -244,8 +303,8 @@ const App = {
         // 確保使用 doc() 而不傳入參數，讓 Firebase 自動生成新的隨機 ID。
         SEED_DATA.forEach(item => { 
             const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
-            // 寫入數據時，不傳入 id 欄位 (因為 SEED_DATA 已經沒有 id 欄位了)
-            batch.set(ref, item); 
+            const { id, ...data } = item;
+            batch.set(ref, data); 
         });
         
         await batch.commit();
@@ -265,7 +324,9 @@ const App = {
     loadHistory: function() {
         if (this.mode === 'demo') {
             const storedHistory = localStorage.getItem('row_mod_history');
-            if (storedHistory) this.history = JSON.parse(storedHistory);
+            if (storedHistory) {
+                try { this.history = JSON.parse(storedHistory); } catch(e) { this.history = []; }
+            }
         }
     },
     logChange: function(action, details, targetId) {
@@ -394,6 +455,14 @@ const App = {
 
     saveMemberData: async function() {
         const id = document.getElementById('editId').value;
+        
+        // 優化: 輸入驗證，防止儲存空資料
+        const gameName = document.getElementById('gameName').value.trim();
+        const lineName = document.getElementById('lineName').value.trim();
+        
+        if (!gameName) { alert("請輸入遊戲 ID"); return; }
+        if (!lineName) { alert("請輸入 LINE 暱稱"); return; }
+
         let mainClass = "";
         const input = document.getElementById('subJobInput');
         const select = document.getElementById('subJobSelect');
@@ -407,32 +476,34 @@ const App = {
         if (!mainClass || mainClass === "" || mainClass === "先選職業" || mainClass === "選擇流派") mainClass = "待定";
         
         const member = { 
-            lineName: document.getElementById('lineName').value, 
-            gameName: document.getElementById('gameName').value, 
+            lineName: lineName, 
+            gameName: gameName, 
             mainClass: mainClass, 
             role: document.getElementById('role').value, 
             rank: document.getElementById('rank').value, 
             intro: document.getElementById('intro').value 
         };
         
-        let action = '';
-        if (id) { 
-            await this.updateMember(id, member);
-            action = '成員資料更新';
-        } else { 
-            await this.addMember(member); 
-            action = '新增成員';
+        try {
+            let action = '';
+            if (id) { 
+                await this.updateMember(id, member);
+                action = '成員資料更新';
+            } else { 
+                await this.addMember(member); 
+                action = '新增成員';
+            }
+            this.logChange(action, `${member.gameName} (${member.mainClass})`, id || member.gameName);
+            this.closeModal('editModal');
+        } catch(e) {
+            console.error("Save failed:", e);
+            alert("儲存失敗，請檢查網路連線或權限設定。");
         }
-
-        this.logChange(action, `${member.gameName} (${member.mainClass})`, id || member.gameName);
-
-        this.closeModal('editModal');
     },
 
     addMember: async function(member) {
         if (this.mode === 'firebase') { 
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            // 新增時使用 .add() 確保獲得隨機 ID
             await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).add(member); 
         } 
         else { 
@@ -459,7 +530,6 @@ const App = {
                      // 執行 set 操作，若文件不存在則創建它 (用 SEED_DATA 提供的 ID)
                      await docRef.set(member); 
                 } else {
-                    // 如果是其他錯誤，則拋出
                     throw error;
                 }
             }
@@ -474,21 +544,46 @@ const App = {
         }
     },
 
+    // 【修復項目】App.deleteMember 函式 - 新增 Firebase 雲端連動刪除 GVG/固定團名單的邏輯
     deleteMember: async function(id) {
         if (!confirm("確定要刪除這位成員嗎？")) return;
         const member = this.members.find(d => d.id === id);
-        if (this.mode === 'firebase') { 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            // 直接刪除該隨機 ID 文件
-            await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(id).delete(); 
-        } 
-        else { 
-            this.members = this.members.filter(d => d.id !== id); 
-            this.groups.forEach(g => { g.members = g.members.filter(mid => (typeof mid === 'string' ? mid : mid.id) !== id); }); 
-            this.saveLocal(); 
+        
+        try {
+            if (this.mode === 'firebase') { 
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+                const docRef = this.db.collection('artifacts').doc(appId).collection('public').doc('data');
+                const batch = this.db.batch();
+
+                // 1. 刪除成員文件
+                batch.delete(docRef.collection(this.collectionMembers).doc(id)); 
+
+                // 2. 移除 GVG / 固定團隊伍中的成員 ID
+                const groupsSnap = await docRef.collection(this.collectionGroups).get(); 
+                
+                groupsSnap.forEach(groupDoc => {
+                    const groupData = groupDoc.data();
+                    const filteredMembers = (groupData.members || []).filter(m => (typeof m === 'string' ? m : m.id) !== id);
+                    
+                    if (filteredMembers.length !== (groupData.members || []).length) {
+                        batch.update(groupDoc.ref, { members: filteredMembers });
+                    }
+                });
+
+                await batch.commit();
+            } 
+            else { 
+                this.members = this.members.filter(d => d.id !== id); 
+                this.groups.forEach(g => { g.members = g.members.filter(mid => (typeof mid === 'string' ? mid : mid.id) !== id); }); 
+                this.saveLocal(); 
+            }
+
+            this.logChange('成員刪除', `刪除成員: ${member ? member.gameName : 'Unknown'}`, id);
+            this.closeModal('editModal');
+        } catch(e) {
+            console.error("Delete failed:", e);
+            alert("刪除失敗，請稍後再試。");
         }
-        this.logChange('成員刪除', `刪除成員: ${member ? member.gameName : 'Unknown'}`, id);
-        this.closeModal('editModal');
     },
 
     saveSquad: async function() {
@@ -505,30 +600,35 @@ const App = {
         if(!name) { alert("請輸入隊伍名稱"); return; }
         const squadData = { name, note, members: selectedMembers, type };
         
-        let action = '';
-        if (id) {
-            if (this.mode === 'firebase') { 
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-                await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).doc(id).update(squadData); 
-            } 
-            else { 
-                const idx = this.groups.findIndex(g => g.id === id); 
-                if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal(); } 
+        try {
+            let action = '';
+            if (id) {
+                if (this.mode === 'firebase') { 
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+                    await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).doc(id).update(squadData); 
+                } 
+                else { 
+                    const idx = this.groups.findIndex(g => g.id === id); 
+                    if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal(); } 
+                }
+                action = '隊伍資料更新';
+            } else {
+                if (this.mode === 'firebase') { 
+                    const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+                    await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).add(squadData); 
+                } 
+                else { 
+                    squadData.id = 'g_' + Date.now(); 
+                    this.groups.push(squadData); this.saveLocal(); 
+                }
+                action = '建立新隊伍';
             }
-            action = '隊伍資料更新';
-        } else {
-            if (this.mode === 'firebase') { 
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-                await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).add(squadData); 
-            } 
-            else { 
-                squadData.id = 'g_' + Date.now(); 
-                this.groups.push(squadData); this.saveLocal(); 
-            }
-            action = '建立新隊伍';
+            this.logChange(action, `隊伍: ${name} (成員數: ${selectedMembers.length})`, id || 'new');
+            this.closeModal('squadModal');
+        } catch(e) {
+            console.error("Save squad failed:", e);
+            alert("隊伍儲存失敗，請檢查權限。");
         }
-        this.logChange(action, `隊伍: ${name} (成員數: ${selectedMembers.length})`, id || 'new');
-        this.closeModal('squadModal');
     },
     deleteSquad: async function(id) {
         if (!['master', 'admin', 'commander'].includes(this.userRole)) {
@@ -537,16 +637,22 @@ const App = {
 
         if (!confirm("確定要解散這個隊伍嗎？")) return;
         const group = this.groups.find(g => g.id === id);
-        if (this.mode === 'firebase') { 
-            const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
-            await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).doc(id).delete(); 
-        } 
-        else { 
-            this.groups = this.groups.filter(g => g.id !== id); 
-            this.saveLocal(); 
+        
+        try {
+            if (this.mode === 'firebase') { 
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app'; 
+                await this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionGroups).doc(id).delete(); 
+            } 
+            else { 
+                this.groups = this.groups.filter(g => g.id !== id); 
+                this.saveLocal(); 
+            }
+            this.logChange('解散隊伍', `解散隊伍: ${group ? group.name : 'Unknown'}`, id);
+            this.closeModal('squadModal');
+        } catch(e) {
+            console.error("Delete squad failed:", e);
+            alert("解散失敗。");
         }
-        this.logChange('解散隊伍', `解散隊伍: ${group ? group.name : 'Unknown'}`, id);
-        this.closeModal('squadModal');
     },
 
     toggleMemberStatus: function(groupId, memberId) {
@@ -597,10 +703,7 @@ const App = {
         grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
     },
 
-    // =======================================================
-    // ** 【最終修復】App.createCardHTML 函式 **
-    // 移除所有數字序號邏輯，統一顯示星星符號。
-    // =======================================================
+    // 修正後的序號邏輯：移除所有數字序號邏輯，統一顯示星星符號。
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
         const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
@@ -659,7 +762,6 @@ const App = {
             </div>
         `;
     },
-    // =======================================================
     
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
@@ -791,7 +893,13 @@ const App = {
     },
 
     openEditModal: function(id) {
-        const item = this.members.find(d => d.id === id); if (!item) return;
+        // 優化: 如果 ID 不存在 (錯誤點擊)，直接返回
+        if (!id) return;
+        
+        const item = this.members.find(d => d.id === id); 
+        // 優化: 如果找不到該成員，直接返回
+        if (!item) return;
+
         document.getElementById('editId').value = item.id;
         document.getElementById('lineName').value = item.lineName; 
         document.getElementById('gameName').value = item.gameName;
@@ -856,7 +964,6 @@ const App = {
     
     updateBaseJobSelect: function() {
          const baseSelect = document.getElementById('baseJobSelect');
-         // 避免重複添加選項，先清空
          baseSelect.innerHTML = '<option value="" disabled selected>選擇職業</option>';
          Object.keys(JOB_STRUCTURE).forEach(job => { 
              const opt = document.createElement('option'); 
