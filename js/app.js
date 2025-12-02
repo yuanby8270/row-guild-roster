@@ -107,7 +107,7 @@ const SEED_DATA = [
     { id: "m44", lineName: "中古車採購 威霖", gameName: "Weilin", mainClass: "", role: "待定", rank: "成員", intro: "" },
     { id: "m45", lineName: "江", gameName: "蝸牛丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
     { id: "m46", lineName: "ZhenYun", gameName: "三十九度八", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m47", lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
+    { id: "m47", lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "待領養孤兒" },
     { id: "m48", lineName: "張誌恒", gameName: "珮可", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
     { id: "m49", lineName: "哈啾", gameName: "哈啾", mainClass: "", role: "待定", rank: "成員", intro: "哈啾本哈" },
     { id: "m50", lineName: "丫鵬", gameName: "長歌恨", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
@@ -133,7 +133,36 @@ const SEED_DATA = [
     { id: "m70", lineName: "廖琮昱", gameName: "果仔", mainClass: "賢者", role: "待定", rank: "成員", intro: "待領養孤兒" },
     { id: "m71", lineName: "鍾豐年", gameName: "daliesi", mainClass: "刺客(毒)", role: "輔助", rank: "成員", intro: "" },
     { id: "m72", lineName: "蔡家昕", gameName: "星夜", mainClass: "刺客(毒)", role: "輸出", rank: "成員", intro: "睡神無敵小弟" },
-    { id: "m73", lineName: "NICK", gameName: "狗是水鏡", mainClass: "流氓(輸出)", role: "輸出", rank: "成員", intro: "" }
+    { id: "m73", lineName: "NICK", gameName: "狗是水鏡", mainClass: "流氓(輸出)", role: "輸出", rank: "成員", intro: "" },
+    
+    // 從 #74 擴展到 #100 的空位
+    { id: "m74", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #74" },
+    { id: "m75", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #75" },
+    { id: "m76", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #76" },
+    { id: "m77", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #77" },
+    { id: "m78", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #78" },
+    { id: "m79", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #79" },
+    { id: "m80", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #80" },
+    { id: "m81", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #81" },
+    { id: "m82", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #82" },
+    { id: "m83", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #83" },
+    { id: "m84", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #84" },
+    { id: "m85", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #85" },
+    { id: "m86", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #86" },
+    { id: "m87", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #87" },
+    { id: "m88", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #88" },
+    { id: "m89", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #89" },
+    { id: "m90", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #90" },
+    { id: "m91", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #91" },
+    { id: "m92", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #92" },
+    { id: "m93", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #93" },
+    { id: "m94", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #94" },
+    { id: "m95", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #95" },
+    { id: "m96", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #96" },
+    { id: "m97", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #97" },
+    { id: "m98", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #98" },
+    { id: "m99", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #99" },
+    { id: "m100", lineName: "", gameName: "空位", mainClass: "初心者", role: "待定", rank: "成員", intro: "預留成員 #100" }
 ];
 
 const SEED_GROUPS = [];
@@ -189,7 +218,7 @@ const App = {
             const idA = a.id;
             const idB = b.id;
             const isSeedA = /^m\d{2}$/.test(idA);
-            const isSeedB = /^m\d{2}$/.test(idB);
+            const isSeedB = /^m\d{2}$/. ядерном
             
             if (isSeedA && isSeedB) {
                 return idA.localeCompare(idB);
@@ -213,7 +242,8 @@ const App = {
                 publicData.collection(this.collectionMembers).onSnapshot(snap => { 
                     const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
                     this.members = this.sortMembers(arr); 
-                    if (arr.length === 0 && this.members.length === 0) this.seedFirebaseMembers(); else { this.render(); } 
+                    // 這裡檢查 Firebase 集合是否為空
+                    if (snap.size === 0) this.seedFirebaseMembers(); else { this.render(); } 
                 });
                 publicData.collection(this.collectionGroups).onSnapshot(snap => { const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); this.groups = arr; this.render(); });
             }
@@ -249,13 +279,16 @@ const App = {
         const batch = this.db.batch();
         
         // 確保使用 doc() 而不傳入參數，讓 Firebase 自動生成新的隨機 ID。
-        // 這樣可避免 m01, m02 舊 ID 造成數據庫衝突。
         SEED_DATA.forEach(item => { 
             const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
-            batch.set(ref, item); 
+            // 由於種子數據包含 m01, m02 這些 ID，我們將其從數據中移除，
+            // 確保 Firebase 僅保存成員資訊，並使用新的隨機 ID 作為文件鍵。
+            const { id, ...data } = item;
+            batch.set(ref, data); 
         });
         
         await batch.commit();
+        console.log("Seed data successfully written with random IDs.");
     },
     // =======================================================
 
@@ -447,7 +480,7 @@ const App = {
             this.saveLocal(); 
         }
     },
-
+    
     // =======================================================
     // ** 【修復重點】App.updateMember 函式 **
     // 解決 ID 衝突導致的更新失敗，並確保 Modal 關閉
@@ -465,7 +498,6 @@ const App = {
                 if (error.code === 'not-found' || error.message.includes('No document to update')) {
                      console.warn(`Attempted update failed for ID ${id}. Switching to set/add.`);
                      // 執行 set 操作，若文件不存在則創建它 (用 SEED_DATA 提供的 ID)
-                     // 注意：這裡使用 set(member) 仍會導致 m01, m02 ID 覆蓋，但它能暫時解決崩潰問題。
                      await docRef.set(member); 
                 } else {
                     // 如果是其他錯誤，則拋出
@@ -606,10 +638,6 @@ const App = {
         grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
     },
 
-    // =======================================================
-    // ** 【修復項目】App.createCardHTML 函式 **
-    // 修正序號顯示邏輯，確保顯示 #01, #02...
-    // =======================================================
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
         const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
@@ -635,6 +663,7 @@ const App = {
             }
         } else {
              // 針對新增的成員 (使用隨機 Firebase ID) 顯示 •
+             // 註：Firebase 隨機 ID 的成員不會有固定的序號
              displayNo = "•";
         }
         // -------------------------
@@ -678,8 +707,7 @@ const App = {
             </div>
         `;
     },
-    // =======================================================
-
+    
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
         const warningMsg = document.getElementById('adminWarning');
@@ -797,8 +825,12 @@ const App = {
         document.getElementById('memberForm').reset(); 
         document.getElementById('editId').value = ''; 
         document.getElementById('deleteBtnContainer').innerHTML = ''; 
+        
+        // 確保職業下拉菜單被正確初始化
         document.getElementById('baseJobSelect').value = "";
-        this.updateSubJobSelect();
+        this.updateBaseJobSelect(); // 載入主職業選項
+        this.updateSubJobSelect(); // 清空流派選項
+        
         document.getElementById('subJobSelectWrapper').classList.remove('hidden');
         document.getElementById('subJobInput').classList.add('hidden');
         
@@ -820,13 +852,8 @@ const App = {
         const selectWrapper = document.getElementById('subJobSelectWrapper');
         const toggleBtn = document.getElementById('toggleJobBtn');
 
-        baseSelect.innerHTML = '<option value="" disabled selected>選擇職業</option>';
-        Object.keys(JOB_STRUCTURE).forEach(job => { 
-            const opt = document.createElement('option'); 
-            opt.value = job; 
-            opt.innerText = job; 
-            baseSelect.appendChild(opt); 
-        });
+        // 確保職業下拉菜單被正確初始化
+        this.updateBaseJobSelect();
 
         const fullJob = item.mainClass;
         const match = fullJob.match(/^([^(]+)\(([^)]+)\)$/);
@@ -842,6 +869,8 @@ const App = {
             subSelect.value = fullJob;
         } else {
             if (['master', 'admin'].includes(this.userRole)) { 
+                baseSelect.value = ""; // 確保選單重置
+                this.updateSubJobSelect();
                 subInput.value = fullJob; 
                 subInput.classList.remove('hidden'); 
                 selectWrapper.classList.add('hidden'); 
@@ -872,6 +901,18 @@ const App = {
         app.showModal('editModal');
     },
     
+    updateBaseJobSelect: function() {
+         const baseSelect = document.getElementById('baseJobSelect');
+         // 避免重複添加選項，先清空
+         baseSelect.innerHTML = '<option value="" disabled selected>選擇職業</option>';
+         Object.keys(JOB_STRUCTURE).forEach(job => { 
+             const opt = document.createElement('option'); 
+             opt.value = job; 
+             opt.innerText = job; 
+             baseSelect.appendChild(opt); 
+         });
+    },
+
     updateSubJobSelect: function() {
         const baseJob = document.getElementById('baseJobSelect').value;
         const subSelect = document.getElementById('subJobSelect');
