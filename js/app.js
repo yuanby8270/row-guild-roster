@@ -107,7 +107,7 @@ const SEED_DATA = [
     { id: "m44", lineName: "中古車採購 威霖", gameName: "Weilin", mainClass: "", role: "待定", rank: "成員", intro: "" },
     { id: "m45", lineName: "江", gameName: "蝸牛丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
     { id: "m46", lineName: "ZhenYun", gameName: "三十九度八", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
-    { id: "m47", lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "待領養孤兒" },
+    { id: "m47", lineName: "小寶", gameName: "提摩丶", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "" },
     { id: "m48", lineName: "張誌恒", gameName: "珮可", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "待領養孤兒" },
     { id: "m49", lineName: "哈啾", gameName: "哈啾", mainClass: "", role: "待定", rank: "成員", intro: "哈啾本哈" },
     { id: "m50", lineName: "丫鵬", gameName: "長歌恨", mainClass: "獵人(鳥)", role: "待定", rank: "成員", intro: "" },
@@ -184,7 +184,6 @@ const App = {
         this.switchTab('home'); 
     },
     
-    // ... (App.sortMembers 函式)
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
             const idA = a.id;
@@ -202,7 +201,6 @@ const App = {
         });
     },
 
-    // ... (App.initFirebase 函式)
     initFirebase: async function(config) {
         try {
             if (!firebase.apps.length) firebase.initializeApp(config);
@@ -222,7 +220,6 @@ const App = {
         } catch (e) { console.error("Firebase Init Failed", e); this.initDemoMode(); }
     },
 
-    // ... (App.initDemoMode 函式)
     initDemoMode: function() {
         this.mode = 'demo';
         const storedMem = localStorage.getItem('row_local_members'); const storedGrp = localStorage.getItem('row_local_groups');
@@ -243,15 +240,25 @@ const App = {
         this.render();
     },
 
-    // ... (App.seedFirebaseMembers 函式)
+    // =======================================================
+    // ** 【修復項目】App.seedFirebaseMembers 函式 **
+    // 修正寫入方式，使用 .doc() 強制隨機 ID，避免 m01, m02 衝突。
+    // =======================================================
     seedFirebaseMembers: async function() {
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'row-guild-app';
         const batch = this.db.batch();
-        SEED_DATA.forEach(item => { const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(item.id); batch.set(ref, item); }); // <-- 注意: 這裡已修改為使用 item.id 作為 doc ID
+        
+        // 確保使用 doc() 而不傳入參數，讓 Firebase 自動生成新的隨機 ID。
+        // 這樣可避免 m01, m02 舊 ID 造成數據庫衝突。
+        SEED_DATA.forEach(item => { 
+            const ref = this.db.collection('artifacts').doc(appId).collection('public').doc('data').collection(this.collectionMembers).doc(); 
+            batch.set(ref, item); 
+        });
+        
         await batch.commit();
     },
+    // =======================================================
 
-    // ... (App.saveLocal 函式)
     saveLocal: function() {
         if (this.mode === 'demo') { 
             localStorage.setItem('row_local_members', JSON.stringify(this.members)); 
@@ -261,7 +268,6 @@ const App = {
         }
     },
     
-    // ... (App.logChange, App.showHistoryModal, App.openLoginModal, App.handleLogin, App.updateAdminUI, App.switchTab, App.handleMainAction 函式)
     loadHistory: function() {
         if (this.mode === 'demo') {
             const storedHistory = localStorage.getItem('row_mod_history');
@@ -459,6 +465,7 @@ const App = {
                 if (error.code === 'not-found' || error.message.includes('No document to update')) {
                      console.warn(`Attempted update failed for ID ${id}. Switching to set/add.`);
                      // 執行 set 操作，若文件不存在則創建它 (用 SEED_DATA 提供的 ID)
+                     // 注意：這裡使用 set(member) 仍會導致 m01, m02 ID 覆蓋，但它能暫時解決崩潰問題。
                      await docRef.set(member); 
                 } else {
                     // 如果是其他錯誤，則拋出
@@ -493,7 +500,6 @@ const App = {
         this.closeModal('editModal');
     },
 
-    // ... (App.saveSquad 函式及其餘所有函式)
     saveSquad: async function() {
         if (!['master', 'admin', 'commander'].includes(this.userRole)) {
             alert("權限不足：僅有管理人員可建立/編輯分組"); return;
@@ -600,6 +606,10 @@ const App = {
         grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
     },
 
+    // =======================================================
+    // ** 【修復項目】App.createCardHTML 函式 **
+    // 修正序號顯示邏輯，確保顯示 #01, #02...
+    // =======================================================
     createCardHTML: function(item, idx) {
         const jobName = item.mainClass || '';
         const style = JOB_STYLES.find(s => s.key.some(k => jobName.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
@@ -615,8 +625,19 @@ const App = {
             return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`;
         }).join('');
         
-        const origIndex = SEED_DATA.findIndex(s => s.id === item.id);
-        const displayNo = origIndex >= 0 ? `#${(origIndex + 1).toString().padStart(2, '0')}` : "•";
+        // --- 修正後的序號邏輯 ---
+        let displayNo = "•";
+        if (item.id && item.id.startsWith('m')) {
+            // 從 m01, m02 中提取數字並格式化為 #01, #02
+            const num = parseInt(item.id.substring(1));
+            if (!isNaN(num)) {
+                 displayNo = `#${num.toString().padStart(2, '0')}`;
+            }
+        } else {
+             // 針對新增的成員 (使用隨機 Firebase ID) 顯示 •
+             displayNo = "•";
+        }
+        // -------------------------
 
         const getRoleBadge = (r) => {
             if (r.includes('輸出')) return `<span class="tag tag-dps">${r}</span>`;
@@ -657,6 +678,7 @@ const App = {
             </div>
         `;
     },
+    // =======================================================
 
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'misc';
