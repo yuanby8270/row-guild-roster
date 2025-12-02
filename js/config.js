@@ -3,8 +3,8 @@
 // 應用程式的靜態配置、集合名稱和初始資料。
 
 // --- 全域應用程式設定 ---
-// 這是您提供的 Firebase 配置，已使用 const 而非 export const
 const FIREBASE_CONFIG = {
+    // 恢復 API Key
     apiKey: "AIzaSyCxVEcgftiu7qmHhgLV-XaLzf6naBhaf-k",
     authDomain: "ro123-aae1e.firebaseapp.com",
     projectId: "ro123-aae1e",
