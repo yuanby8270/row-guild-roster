@@ -636,7 +636,53 @@ const App = {
     },
     showModal: function(id) { document.getElementById(id).classList.remove('hidden'); },
     closeModal: function(id) { document.getElementById(id).classList.add('hidden'); },
-    setupListeners: function() {},
+    // ** 優化後的 setupListeners **
+    setupListeners: function() {
+        // --- 1. 首頁四大按鈕監聽 ---
+        // 為了確保這些 ID 存在，請參照下方 HTML 修改建議
+        const bindHomeBtn = (id, tabName) => {
+            const btn = document.getElementById(id);
+            if (btn) {
+                btn.onclick = () => {
+                    this.switchTab(tabName);
+                    window.scrollTo(0, 0); // 切換後滾動到頂部
+                };
+            }
+        };
+
+        bindHomeBtn('btn-home-members', 'members');     // 成員名冊
+        bindHomeBtn('btn-home-activities', 'activities'); // 公會活動
+        bindHomeBtn('btn-home-gvg', 'gvg');             // GVG 分組
+        bindHomeBtn('btn-home-groups', 'groups');       // 固定團
+
+        // --- 2. 底部導航欄監聽 (確保 id 為 tab-xxx) ---
+        document.querySelectorAll('.nav-pill').forEach(btn => {
+            btn.onclick = (e) => {
+                // 取得按鈕 id 的後綴 (例如 tab-home -> home)
+                const targetTab = btn.id.replace('tab-', '');
+                this.switchTab(targetTab);
+            };
+        });
+
+        // --- 3. 搜尋框監聽 (即時搜尋) ---
+        const bindSearch = (inputId, renderFunc) => {
+            const input = document.getElementById(inputId);
+            if (input) {
+                input.oninput = () => renderFunc.call(this); // 使用 .call(this) 確保 render 函式內的 this 正確
+            }
+        };
+
+        bindSearch('searchInput', this.renderMembers);
+        bindSearch('groupSearchInput', this.renderSquads);
+        bindSearch('claimSearch', this.renderClaimList);
+        
+        // --- 4. 管理員開關監聽 ---
+        const adminBtn = document.getElementById('adminToggleBtn');
+        if(adminBtn) adminBtn.onclick = () => this.openLoginModal();
+        
+        const mainActionBtn = document.getElementById('mainActionBtn');
+        if(mainActionBtn) mainActionBtn.onclick = () => this.handleMainAction();
+    },
     setFilter: function(f) { this.currentFilter = f; this.renderMembers(); },
     setJobFilter: function(j) { this.currentJobFilter = j; this.renderMembers(); },
     exportCSV: function() {
