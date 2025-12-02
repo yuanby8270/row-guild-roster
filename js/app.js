@@ -25,7 +25,7 @@ const App = {
         this.loadLocalState();
         this.initFirebase();
         this.updateAdminUI();
-        this.populateJobSelects(); // (FIX) 修正初始化時填入選單
+        this.populateJobSelects();
         this.switchTab('home');
     },
 
@@ -242,12 +242,10 @@ const App = {
     
     setSquadRoleFilter: function(f) { this.currentSquadRoleFilter = f; this.renderSquads(); },
 
-    // Modal Role Filter Logic
     setModalRoleFilter: function(f) { 
         this.currentModalRoleFilter = f; 
         this.renderSquadMemberSelect(); 
         
-        // 更新按鈕樣式
         const btns = document.querySelectorAll('#modalFilterContainer button');
         btns.forEach(b => {
             const isActive = (b.getAttribute('data-filter') === f);
@@ -258,7 +256,6 @@ const App = {
         });
     },
 
-    // (FIX) 修正：填充職業選單，同時處理 #baseJobSelect (Modal) 和 #filterJob (成員名冊)
     populateJobSelects: function() { 
         const baseSelect = document.getElementById('baseJobSelect'); 
         const filterSelect = document.getElementById('filterJob');
@@ -273,7 +270,7 @@ const App = {
             Object.keys(JOB_STRUCTURE).forEach(j => filterSelect.innerHTML += `<option value="${j}">${j}</option>`); 
         }
     },
-    populateBaseJobSelect: function() { this.populateJobSelects(); }, // 相容舊呼叫
+    populateBaseJobSelect: function() { this.populateJobSelects(); }, 
 
     updateSubJobSelect: function() {
         const b = document.getElementById('baseJobSelect').value, s = document.getElementById('subJobSelect');
@@ -434,7 +431,12 @@ const App = {
             if (isGVG) {
                 const readyCount = groupMembers.filter(m => m.status === 'ready').length;
                 const leaveCount = groupMembers.filter(m => m.status === 'leave').length;
-                footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500"><span>${groupMembers.length} 人</span><div class="flex gap-2"><span class="text-green-600">🟢 ${readyCount}</span><span class="text-yellow-600">🟡 ${leaveCount}</span></div></div>`;
+                // 顯示隊長
+                const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
+                footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500">
+                    <span class="text-blue-600">👑 隊長: ${leader}</span>
+                    <div class="flex gap-2"><span class="text-green-600">🟢 ${readyCount}</span><span class="text-yellow-600">🟡 ${leaveCount}</span></div>
+                </div>`;
             } else { footer = `<div class="bg-white p-2 border-t border-slate-100 text-center text-xs text-slate-400">固定成員 ${groupMembers.length} 人</div>`; }
 
             return `<div class="${cardClass} flex flex-col h-full overflow-hidden"><div class="${headerClass} p-4 flex justify-between items-center rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center">${copyBtn}${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
@@ -519,12 +521,16 @@ const App = {
             document.getElementById('squadName').value = g.name; document.getElementById('squadNote').value = g.note;
             document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-500 text-sm hover:underline">解散</button>`;
             
-            // 載入成員與隊長
             this.currentSquadMembers = g.members.map(m => typeof m === 'string' ? {id: m, status: 'pending'} : m);
-            // 注意：要先有 members 才能渲染選單，渲染後才能設定 value
+            // 關鍵：先渲染選單（包含隊長選單），再設定值
             this.renderSquadMemberSelect(); 
+            
             const leaderSelect = document.getElementById('squadLeader');
-            if(leaderSelect) leaderSelect.value = g.leaderId || "";
+            if(leaderSelect) {
+                // 如果目前的隊長ID不在候選名單中（可能被移除了），則重置
+                // 但 updateLeaderOptions 已經處理了清單產生，這裡我們強制選取
+                leaderSelect.value = g.leaderId || "";
+            }
         } else {
             document.getElementById('squadName').value = ''; document.getElementById('squadNote').value = '';
             document.getElementById('deleteSquadBtnContainer').innerHTML = '';
@@ -582,7 +588,7 @@ const App = {
             </label>`;
         }).join('');
 
-        // (NEW) 更新隊長選單邏輯
+        // 核心修正：每次渲染成員列表時，同步更新隊長選單
         this.updateLeaderOptions();
     },
 
@@ -590,21 +596,25 @@ const App = {
     updateLeaderOptions: function() {
         const select = document.getElementById('squadLeader');
         if (!select) return;
-        const currentLeader = select.value;
         
+        const currentVal = select.value; // 記住當前選的值
         select.innerHTML = '<option value="">未指定</option>';
         
-        // 從 currentSquadMembers 中讀取成員資訊並建立選項
+        // 遍歷已勾選的成員
         this.currentSquadMembers.forEach(sm => {
-            const mem = this.members.find(m => m.id === sm.id);
+            const mid = (typeof sm === 'string') ? sm : sm.id;
+            const mem = this.members.find(m => m.id === mid);
             if (mem) {
-                select.innerHTML += `<option value="${mem.id}">${mem.gameName}</option>`;
+                const opt = document.createElement('option');
+                opt.value = mem.id;
+                opt.innerText = mem.gameName;
+                select.appendChild(opt);
             }
         });
 
-        // 如果之前的隊長還在名單內，保持選取；否則重置
-        if (this.currentSquadMembers.some(sm => sm.id === currentLeader)) {
-            select.value = currentLeader;
+        // 如果之前選的人還在，就保持選中；否則重置
+        if (currentVal && this.currentSquadMembers.some(sm => (typeof sm === 'string' ? sm : sm.id) === currentVal)) {
+            select.value = currentVal;
         } else {
             select.value = "";
         }
