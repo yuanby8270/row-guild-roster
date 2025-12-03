@@ -38,19 +38,24 @@ const App = {
         const storedAct = localStorage.getItem('row_local_activities');
         const storedHistory = localStorage.getItem('row_mod_history');
         
-        // 初始化成員數據，並確保有 createdAt 欄位以供排序
+        // --- 排序修正核心 ---
         let initialMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
-        this.members = initialMembers.map(m => ({
+        
+        // 設定一個基準舊時間 (例如 2023/1/1)
+        const baseTime = new Date('2023-01-01').getTime();
+
+        this.members = initialMembers.map((m, index) => ({
             ...m,
-            // 如果沒有建立時間，給予一個模擬的舊時間，確保新成員能排在前面
-            createdAt: m.createdAt || Date.now() - (Math.random() * 86400000 * 365) 
+            // 若成員已有 createdAt 則保留，否則依照「原始索引順序」賦予固定時間
+            // 這樣保證舊資料順序永遠固定，不會隨機亂跳
+            createdAt: m.createdAt || (baseTime + index * 1000) 
         }));
 
         this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         
-        // 立即執行排序
+        // 載入後立即排序
         this.members = this.sortMembers(this.members);
     },
 
@@ -76,15 +81,13 @@ const App = {
     syncWithFirebase: function() {
         if (!this.db || this.mode !== 'firebase') return;
         
-        // 監聽成員變動
         this.db.collection(COLLECTION_NAMES.MEMBERS).onSnapshot(snap => { 
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
-            this.members = this.sortMembers(arr); // 同步後立即排序
+            this.members = this.sortMembers(arr); 
             this.saveLocal('members'); 
             this.render(); 
         });
         
-        // 監聽隊伍變動
         this.db.collection(COLLECTION_NAMES.GROUPS).onSnapshot(snap => { 
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
             this.groups = arr; 
@@ -92,7 +95,6 @@ const App = {
             this.render(); 
         });
         
-        // 監聽活動變動
         if (COLLECTION_NAMES.ACTIVITIES) {
             this.db.collection(COLLECTION_NAMES.ACTIVITIES).onSnapshot(snap => {
                 const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
@@ -103,15 +105,17 @@ const App = {
         }
     },
 
-    // 核心排序邏輯：依照建立時間降序 (最新的在上面)
+    // --- 排序邏輯修正：嚴格依照建立時間 (由舊到新) ---
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            // 優先比較 createdAt
-            if (b.createdAt && a.createdAt) {
-                return b.createdAt - a.createdAt;
+            // 升冪排序：時間小的(舊的)在前面，時間大的(新的)在後面
+            const timeA = a.createdAt || 0;
+            const timeB = b.createdAt || 0;
+            if (timeA !== timeB) {
+                return timeA - timeB; 
             }
-            // 若無時間戳記，則 fallback 到 ID 或名字
-            return (a.gameName || '').localeCompare(b.gameName || '');
+            // 若時間完全相同(極少見)，則依 ID 排序確保穩定
+            return (a.id || '').localeCompare(b.id || '');
         });
     },
 
@@ -223,7 +227,6 @@ const App = {
         grid.innerHTML = filtered.map((item, idx) => this.createCardHTML(item, idx)).join('');
     },
     
-    // (FIX) 移除編號顯示
     createCardHTML: function(item, idx) {
         const mainJob = item.mainClass ? item.mainClass.split('(')[0] : '';
         const style = JOB_STYLES.find(s => s.key.some(k => mainJob.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
@@ -336,7 +339,7 @@ const App = {
         if (!mainClass) mainClass = "待定";
         const member = { lineName: document.getElementById('lineName').value, gameName: document.getElementById('gameName').value, mainClass, role: document.getElementById('role').value, rank: document.getElementById('rank').value, intro: document.getElementById('intro').value };
         
-        // (FIX) 確保新增成員時記錄時間戳記，用於排序
+        // 確保新增成員時記錄時間戳記 (用於排序)
         if (!id) member.createdAt = Date.now();
         
         if (id) await this.updateMember(id, member); else await this.addMember(member);
@@ -366,65 +369,53 @@ const App = {
         } 
     },
     
-    // (FIX) 刪除成員：級聯刪除與活動紀錄保留邏輯
     deleteMember: async function(id) {
         if (!['master', 'admin'].includes(this.userRole)) return;
         if (!confirm("確定要刪除這位成員嗎？")) return;
         
-        // 1. 取得成員資料，用於歷史紀錄
         const deletedMember = this.members.find(d => d.id === id);
         const retiredName = deletedMember ? deletedMember.gameName : '已刪除成員';
         const retiredRole = deletedMember ? deletedMember.mainClass : 'N/A';
 
-        // 2. Firebase 刪除 (物理刪除成員 Document)
         if (this.mode === 'firebase') {
             await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
         } 
         
-        // 3. Local State 更新 (確保畫面即時反應)
         this.members = this.members.filter(d => d.id !== id); 
         
-        // 4. 清理 Groups (移除該成員，若為隊長則移除隊長標記)
+        // 清理 Groups
         this.groups.forEach(g => {
             g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id);
             if (g.leaderId === id) { g.leaderId = null; } 
         });
         
-        // 5. 更新 Activities (重點：保留紀錄，標記為已退會)
+        // 清理 Activities (保留紀錄，標記已退會)
         this.activities.forEach(a => {
             a.winners = a.winners.map(w => {
                 if (w.memberId === id) {
                     return {
                         ...w,
                         memberId: id, 
-                        isRetired: true, // 標記旗標
-                        retiredName: retiredName, // 備份名字
-                        retiredRole: retiredRole  // 備份職業
+                        isRetired: true,
+                        retiredName: retiredName,
+                        retiredRole: retiredRole
                     };
                 }
                 return w;
             });
         });
 
-        // 6. 儲存更新 (如果是 Demo 模式或用於快取更新)
         this.saveLocal();
         
-        // 7. 如果是 Firebase 模式，需要額外寫入 Groups 和 Activities 的變更
+        // Firebase 同步更新 (避免產生空資料)
         if (this.mode === 'firebase') {
-            // 這裡為了簡化，我們假設 onSnapshot 會處理，但為了確保關聯資料正確，
-            // 嚴格來說應該要 batch update。但基於目前架構，我們先依賴 Local State 的快速反應，
-            // 下次讀取時可能會有延遲。
-            // 為了資料一致性，建議針對受影響的 group/activity 發送 update
             this.groups.forEach(async g => {
-                // 簡單檢查是否需要更新 (若 member list 或 leaderId 有變)
-                // 這裡直接 update 比較保險
                 await this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ 
                     members: g.members,
                     leaderId: g.leaderId
                 });
             });
             this.activities.forEach(async a => {
-                // 更新得獎名單
                 await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(a.id).update({
                     winners: a.winners
                 });
@@ -546,6 +537,7 @@ const App = {
             const copyBtn = `<button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2" title="複製隊伍"><i class="fas fa-copy"></i></button>`;
 
             let footer = "";
+            
             const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
             
             if (isGVG) {
