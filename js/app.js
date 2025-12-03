@@ -42,12 +42,14 @@ const App = {
         let initialMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
         
         // 設定一個基準舊時間 (例如 2023/1/1)
+        // SEED_DATA 依照陣列順序，賦予遞增的時間戳記
+        // index 0 (m01) = baseTime
+        // index 1 (m02) = baseTime + 1000
         const baseTime = new Date('2023-01-01').getTime();
 
         this.members = initialMembers.map((m, index) => ({
             ...m,
-            // 若成員已有 createdAt 則保留，否則依照「原始索引順序」賦予固定時間
-            // 這樣保證舊資料順序永遠固定，不會隨機亂跳
+            // 若成員已有 createdAt 則保留，否則依照「原始索引順序」賦予時間
             createdAt: m.createdAt || (baseTime + index * 1000) 
         }));
 
@@ -105,16 +107,16 @@ const App = {
         }
     },
 
-    // --- 排序邏輯修正：嚴格依照建立時間 (由舊到新) ---
+    // --- 排序邏輯修正：由舊到新 (Ascending) ---
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
-            // 升冪排序：時間小的(舊的)在前面，時間大的(新的)在後面
+            // 升冪排序：時間小的(舊的/m01)在前面，時間大的(新的)在後面
             const timeA = a.createdAt || 0;
             const timeB = b.createdAt || 0;
             if (timeA !== timeB) {
                 return timeA - timeB; 
             }
-            // 若時間完全相同(極少見)，則依 ID 排序確保穩定
+            // 若時間完全相同，則依 ID 排序確保穩定
             return (a.id || '').localeCompare(b.id || '');
         });
     },
@@ -407,7 +409,6 @@ const App = {
 
         this.saveLocal();
         
-        // Firebase 同步更新 (避免產生空資料)
         if (this.mode === 'firebase') {
             this.groups.forEach(async g => {
                 await this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ 
@@ -537,7 +538,6 @@ const App = {
             const copyBtn = `<button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2" title="複製隊伍"><i class="fas fa-copy"></i></button>`;
 
             let footer = "";
-            
             const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
             
             if (isGVG) {
