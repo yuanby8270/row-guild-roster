@@ -1,12 +1,12 @@
-// app.js - Final Fix (Delete Issue & Variable Collision Resolved)
+// app.js - Final Version (Comprehensive Audit Logs)
 
 if (typeof window.AppConfig === 'undefined') {
-    console.error("Config not loaded.");
+    console.error("Configuration (config.js) not loaded.");
     document.body.innerHTML = '<div style="padding: 50px; text-align: center; color: red;">錯誤：config.js 未載入。</div>';
 }
 
-// 直接使用 window.AppConfig，避免變數重複宣告錯誤
-const Cfg = window.AppConfig || {}; 
+const Cfg = window.AppConfig || {};
+const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES } = Cfg;
 
 const App = {
     db: null, auth: null,
@@ -97,16 +97,14 @@ const App = {
             this.activities = arr; this.saveLocal('activities'); this.render();
         });
 
-        // [Updated] 預先請假同步：確保 ID 一致
         this.db.collection('leaves').onSnapshot(snap => {
             const arr = []; 
             snap.forEach(d => {
-                // 將 Firestore 的 Document ID 寫入物件 ID，確保刪除時能找到
                 arr.push({ ...d.data(), id: d.id }); 
             });
             this.leaves = arr; 
             this.saveLocal('leaves'); 
-            this.renderLeaveList(); // 資料更新時即時重繪列表
+            this.renderLeaveList(); 
         });
     },
 
@@ -314,14 +312,16 @@ const App = {
         if (!isPre && !s) { alert("請選擇主題"); return; }
 
         let success = false;
+        
+        // 取得成員名稱供 Log 使用
+        const memName = this.members.find(m => m.id === mid)?.gameName || mid;
 
         if (isPre) {
-            // [Updated] 新增預先請假邏輯：若為 Firebase 模式，強制使用 docId 等於資料 ID，方便日後刪除
             const leaveId = 'l_' + Date.now();
             const newLeave = { id: leaveId, memberId: mid, date: d, note: n, type: 'pre-leave' };
             
             if (this.mode === 'firebase') { 
-                this.db.collection('leaves').doc(leaveId).set(newLeave); // 使用 .set() 指定文件ID
+                this.db.collection('leaves').doc(leaveId).set(newLeave); 
             } else { 
                 this.leaves.push(newLeave); 
                 this.saveLocal('leaves'); 
@@ -341,7 +341,7 @@ const App = {
         }
 
         if (success) {
-            this.logChange('新增請假', `${d} ${s} - ${n}`, mid);
+            this.logChange('新增請假', `${d} ${s} - ${n}`, memName);
             const msg = document.getElementById('leaveSuccessMsg'); msg.classList.remove('hidden'); setTimeout(() => msg.classList.add('hidden'), 3000);
             this.toggleLeaveForm(); this.renderLeaveList();
         } else { alert("發生錯誤：無法寫入請假紀錄"); }
@@ -384,27 +384,30 @@ const App = {
         container.innerHTML = filtered.map(L => {
             const subMem = L.subId ? this.members.find(m => m.id === L.subId) : null;
             const subText = subMem ? `<span class="text-blue-600"><i class="fas fa-exchange-alt mr-1"></i>替補: ${subMem.gameName}</span>` : (L.source==='pre' ? '-' : '<span class="text-red-400">尚未指定替補</span>');
-            const deleteAction = L.source === 'group' ? `app.cancelLeave('${L.groupId}', '${L.memberId}')` : `app.cancelPreLeave('${L.id}')`;
+            const deleteAction = L.source === 'group' ? `app.cancelLeave('${L.groupId}', '${L.memberId}', '${L.gameName}')` : `app.cancelPreLeave('${L.id}', '${L.gameName}')`;
             return `<div class="bg-white p-4 rounded-xl shadow-sm border-l-4 ${L.source==='pre'?'border-l-gray-500':'border-l-orange-500'} flex justify-between items-start relative overflow-hidden"><div class="absolute right-0 top-0 p-2 opacity-10 text-6xl text-orange-200"><i class="fas fa-coffee"></i></div><div class="relative z-10"><div class="flex items-center gap-2 mb-1"><span class="font-bold text-slate-800 text-lg">${L.gameName}</span><span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${L.mainClass.split('(')[0]}</span></div><div class="text-xs text-slate-500 font-bold mb-1"><span class="bg-slate-100 px-1 rounded mr-1">${L.subject}</span> ${L.groupName}</div><div class="text-sm bg-orange-50 text-orange-800 px-3 py-2 rounded-lg inline-block mb-2"><div class="font-bold flex items-center"><i class="far fa-calendar-alt mr-2"></i>${L.date}</div><div class="text-xs mt-1 opacity-80">${L.note || '無備註'}</div></div><div class="text-xs font-bold bg-white border border-slate-100 rounded px-2 py-1 w-fit shadow-sm">${subText}</div></div><button onclick="${deleteAction}" class="text-slate-300 hover:text-red-500 p-2 transition z-20" title="取消請假"><i class="fas fa-times"></i></button></div>`;
         }).join('');
     },
 
-    cancelLeave: function(groupId, memberId) {
-        if (!confirm("確定要取消此請假紀錄嗎？")) return;
+    cancelLeave: function(groupId, memberId, memberName) {
+        if (!confirm(`確定要取消 ${memberName} 的請假紀錄嗎？`)) return;
         const group = this.groups.find(g => g.id === groupId); if (!group) return;
         const idx = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (idx === -1) return;
         let m = group.members[idx]; m.status = 'pending'; m.leaveDate = null; m.leaveNote = null;
-        group.members[idx] = m; this.saveGroupUpdate(group); this.renderLeaveList(); 
+        group.members[idx] = m; 
+        this.saveGroupUpdate(group); 
+        this.logChange('取消請假', `已取消 ${memberName} 在 ${group.name} 的請假`, memberId);
+        this.renderLeaveList(); 
     },
     
-    // [Updated] 確保使用正確的 Firestore Document ID 進行刪除
-    cancelPreLeave: function(leaveId) {
-        if (!confirm("確定要取消此預先請假嗎？")) return;
+    cancelPreLeave: function(leaveId, memberName) {
+        if (!confirm(`確定要取消 ${memberName} 的預先請假嗎？`)) return;
         if (this.mode === 'firebase') { 
             this.db.collection('leaves').doc(leaveId).delete()
             .then(() => {
                 this.leaves = this.leaves.filter(l => l.id !== leaveId); // 樂觀更新
+                this.logChange('取消預假', `已取消 ${memberName} 的預先請假`, 'N/A');
                 this.renderLeaveList();
             })
             .catch(err => {
@@ -413,6 +416,7 @@ const App = {
         } else { 
             this.leaves = this.leaves.filter(l => l.id !== leaveId); 
             this.saveLocal('leaves'); 
+            this.logChange('取消預假', `已取消 ${memberName} 的預先請假`, 'N/A');
             this.renderLeaveList();
         }
     },
@@ -568,34 +572,33 @@ const App = {
         const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
         if (index === -1) return;
         let m = group.members[index]; if (typeof m === 'string') m = { id: m, status: 'pending', subId: null };
-        if (action === 'leave') { return; } // 黃燈只能由請假單控制
+        if (action === 'leave') { return; } 
         else if (action === 'ready_toggle') { if (m.status === 'leave') return; m.status = (m.status === 'ready') ? 'pending' : 'ready'; }
-        group.members[index] = m; this.saveGroupUpdate(group);
+        group.members[index] = m; 
+        this.saveGroupUpdate(group);
+        // Log status change
+        this.logChange('狀態更新', `${this.members.find(u=>u.id===memberId)?.gameName} -> ${m.status}`, memberId);
     },
     updateGvgSub: function(groupId, memberId, subId) {
         const group = this.groups.find(g => g.id === groupId); if(!group) return;
         const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId); if (index === -1) return;
         let m = group.members[index]; if (typeof m === 'string') m = { id: m, status: 'pending' }; m.subId = subId; 
-        group.members[index] = m; this.saveGroupUpdate(group);
+        group.members[index] = m; 
+        this.saveGroupUpdate(group);
+        this.logChange('替補更新', `隊伍 ${group.name} 成員變更替補`, memberId);
     },
     saveGroupUpdate: function(group) { if (this.mode === 'firebase') this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(group.id).update({ members: group.members }); else this.saveLocal('groups'); },
-    addCustomSubject: function() { const newSub = prompt("請輸入新主題名稱："); if (newSub && !this.raidThemes.includes(newSub)) { this.raidThemes.push(newSub); this.saveLocal('themes'); this.renderSubjectOptions(newSub); } },
+    addCustomSubject: function() { const newSub = prompt("請輸入新主題名稱："); if (newSub && !this.raidThemes.includes(newSub)) { this.raidThemes.push(newSub); this.saveLocal('themes'); this.renderSubjectOptions(newSub); this.logChange('新增主題', newSub, 'SYSTEM'); } },
     
-    // [Updated] 刪除防呆
     deleteCustomSubject: function() {
-        const select = document.getElementById('squadSubject');
-        const target = select.value;
-        const defaults = ['GVG 攻城戰']; // 只保護這個
+        const select = document.getElementById('squadSubject'); const target = select.value;
+        const defaults = ['GVG 攻城戰']; 
         if(defaults.includes(target)) { alert("系統預設主題無法刪除！"); return; }
-        
-        // 檢查是否使用中
         const isUsed = this.groups.some(g => g.subject === target);
         if(isUsed) { alert(`主題「${target}」尚有隊伍正在使用，無法刪除！`); return; }
-
         if(!confirm(`確定要永久刪除主題「${target}」嗎？`)) return;
-        this.raidThemes = this.raidThemes.filter(t => t !== target);
-        this.saveLocal('themes');
-        this.renderSubjectOptions(); 
+        this.raidThemes = this.raidThemes.filter(t => t !== target); this.saveLocal('themes'); this.renderSubjectOptions(); 
+        this.logChange('刪除主題', target, 'SYSTEM');
     },
     renderSubjectOptions: function(selectedVal) { const select = document.getElementById('squadSubject'); if (!select) return; select.innerHTML = this.raidThemes.map(t => `<option value="${t}">${t}</option>`).join(''); if (selectedVal) select.value = selectedVal; },
     openSquadModal: function(id) {
@@ -615,7 +618,6 @@ const App = {
     },
     toggleSquadMember: function(id) { const index = this.currentSquadMembers.findIndex(m => m.id === id); const limit = this.currentTab === 'gvg' ? 5 : 12; if (index > -1) { this.currentSquadMembers.splice(index, 1); } else { if (this.currentSquadMembers.length >= limit) { alert(`此類型隊伍最多 ${limit} 人`); return; } this.currentSquadMembers.push({ id: id, status: 'pending' }); } this.renderSquadMemberSelect(); },
     
-    // [Updated] 選人防呆：當日已請假者 OR 當日已在其他隊伍者 OR *當日已是其他隊伍替補者* -> 變灰無法選取
     renderSquadMemberSelect: function() {
         const search = document.getElementById('memberSearch').value.toLowerCase(); 
         const targetDate = document.getElementById('squadDate').value;
@@ -623,11 +625,7 @@ const App = {
         const currentType = document.getElementById('squadType').value;
 
         let availableMembers = [...this.members];
-        
-        // 1. 找出當日「預先請假」的人員
         const preLeaveMembers = this.leaves.filter(l => l.date === targetDate).map(l => l.memberId);
-
-        // 2. 找出當日「已在其他隊伍」的人員 (僅針對 GVG 類型)
         let busyMembers = [];
         if (currentType === 'gvg' && targetDate) {
             this.groups.forEach(g => {
@@ -635,10 +633,7 @@ const App = {
                     g.members.forEach(m => {
                         const mid = typeof m === 'string' ? m : m.id;
                         busyMembers.push(mid);
-                        // [New Check] 如果這個人有替補，替補也要算忙碌
-                        if (typeof m === 'object' && m.subId) {
-                            busyMembers.push(m.subId);
-                        }
+                        if (typeof m === 'object' && m.subId) { busyMembers.push(m.subId); }
                     });
                 }
             });
@@ -651,28 +646,15 @@ const App = {
         document.getElementById('squadMemberSelect').innerHTML = filtered.map(m => { 
             const checked = isSelected(m.id); 
             const style = Cfg.JOB_STYLES.find(s => s.key.some(k => (m.mainClass||'').includes(k))) || { class: 'bg-job-default', icon: 'fa-user' }; 
-            
-            // 防呆邏輯判斷
             const isLeave = preLeaveMembers.includes(m.id);
             const isBusy = busyMembers.includes(m.id);
             const isUnavailable = isLeave || isBusy;
-
             const disabledClass = isUnavailable ? 'opacity-50 cursor-not-allowed bg-slate-100' : 'hover:bg-slate-50 bg-white cursor-pointer';
             const clickAction = isUnavailable ? '' : `onchange="app.toggleSquadMember('${m.id}')"`;
-            
             let nameSuffix = '';
             if (isLeave) nameSuffix = ' <span class="text-red-500 font-bold text-[10px]">(請假)</span>';
             else if (isBusy) nameSuffix = ' <span class="text-blue-500 font-bold text-[10px]">(他隊/替補)</span>';
-
-            return `
-            <label class="flex items-center space-x-2 p-2 rounded border border-blue-100 transition select-none ${checked ? 'bg-blue-50 border-blue-300' : disabledClass}">
-                <input type="checkbox" value="${m.id}" class="rounded text-blue-500" ${checked?'checked':''} ${isUnavailable?'disabled':''} ${clickAction}>
-                <div class="w-6 h-6 rounded-full flex items-center justify-center text-xs ${style.class.replace('bg-', 'text-')} bg-opacity-20"><i class="fas ${style.icon}"></i></div>
-                <div class="min-w-0 flex-grow">
-                    <div class="text-xs font-bold text-slate-700 truncate">${m.gameName}${nameSuffix}</div>
-                    <div class="text-[10px] text-slate-400">${m.mainClass.split('(')[0]} <span class="${m.role.includes('輸出')?'text-red-400':m.role.includes('坦')?'text-blue-400':'text-green-400'}">${m.role}</span></div>
-                </div>
-            </label>`; 
+            return `<label class="flex items-center space-x-2 p-2 rounded border border-blue-100 transition select-none ${checked ? 'bg-blue-50 border-blue-300' : disabledClass}"><input type="checkbox" value="${m.id}" class="rounded text-blue-500" ${checked?'checked':''} ${isUnavailable?'disabled':''} ${clickAction}><div class="w-6 h-6 rounded-full flex items-center justify-center text-xs ${style.class.replace('bg-', 'text-')} bg-opacity-20"><i class="fas ${style.icon}"></i></div><div class="min-w-0 flex-grow"><div class="text-xs font-bold text-slate-700 truncate">${m.gameName}${nameSuffix}</div><div class="text-[10px] text-slate-400">${m.mainClass.split('(')[0]} <span class="${m.role.includes('輸出')?'text-red-400':m.role.includes('坦')?'text-blue-400':'text-green-400'}">${m.role}</span></div></div></label>`; 
         }).join('');
         this.updateLeaderOptions();
     },
@@ -694,6 +676,7 @@ const App = {
     deleteSquad: async function(id) {
         if (!confirm("確定要解散這個隊伍嗎？")) return;
         if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.GROUPS).doc(id).delete(); else { this.groups = this.groups.filter(g => g.id !== id); this.saveLocal('groups'); }
+        this.logChange('解散隊伍', `ID: ${id}`, 'SYSTEM');
         this.closeModal('squadModal');
     },
     renderActivities: function() {
@@ -708,6 +691,7 @@ const App = {
     handleClaimReward: async function(actId, winnerIdx) {
         if(this.userRole !== 'master') return; const actIndex = this.activities.findIndex(a => a.id === actId); if(actIndex === -1) return; let act = this.activities[actIndex]; if(!act.winners[winnerIdx]) return; act.winners[winnerIdx].claimed = true; act.winners[winnerIdx].claimedAt = Date.now(); act.winners[winnerIdx].claimedBy = 'Master';
         if (this.mode === 'firebase') { await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(actId).update({ winners: act.winners }); } else { this.activities[actIndex] = act; this.saveLocal('activities'); }
+        this.logChange('領取獎勵', `活動 ${act.name}`, 'SYSTEM');
     },
     openActivityModal: function(id) {
         if (this.userRole !== 'master') return; document.getElementById('activityId').value = id || ''; document.getElementById('activityModalTitle').innerText = id ? '編輯' : '新增'; this.currentActivityWinners = [];
@@ -720,9 +704,9 @@ const App = {
         if (this.userRole !== 'master') return; const id = document.getElementById('activityId').value, name = document.getElementById('activityName').value, note = document.getElementById('activityNote').value; if (!name) { alert("請輸入活動名稱"); return; } const activityData = { name, note, winners: this.currentActivityWinners };
         if (id) { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).update(activityData); else { const idx = this.activities.findIndex(a => a.id === id); if (idx !== -1) { this.activities[idx] = { ...this.activities[idx], ...activityData }; this.saveLocal('activities'); } } } 
         else { if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).add(activityData); else { activityData.id = 'act_' + Date.now(); this.activities.push(activityData); this.saveLocal('activities'); } }
-        this.closeModal('activityModal'); this.renderActivities();
+        this.logChange(id ? '活動更新' : '新增活動', name, 'SYSTEM'); this.closeModal('activityModal'); this.renderActivities();
     },
-    deleteActivity: async function(id) { if (this.userRole !== 'master') return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.closeModal('activityModal'); this.renderActivities(); },
+    deleteActivity: async function(id) { if (this.userRole !== 'master') return; if (!confirm("確定要刪除此活動嗎？")) return; if (this.mode === 'firebase') await this.db.collection(Cfg.COLLECTION_NAMES.ACTIVITIES).doc(id).delete(); else { this.activities = this.activities.filter(a => a.id !== id); this.saveLocal('activities'); } this.logChange('刪除活動', `ID: ${id}`, 'SYSTEM'); this.closeModal('activityModal'); this.renderActivities(); },
     openWinnerSelectionModal: function() { this.tempWinnerSelection = this.currentActivityWinners.map(w => w.memberId); document.getElementById('winnerSearchInput').value = ''; this.renderWinnerMemberSelect(); app.showModal('winnerSelectionModal'); },
     renderWinnerMemberSelect: function() {
         const search = document.getElementById('winnerSearchInput').value.toLowerCase(); let list = [...this.members].sort((a, b) => { const aSel = this.tempWinnerSelection.includes(a.id), bSel = this.tempWinnerSelection.includes(b.id); return (aSel && !bSel) ? -1 : (!aSel && bSel) ? 1 : (a.gameName||'').localeCompare(b.gameName||''); });
