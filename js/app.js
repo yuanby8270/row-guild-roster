@@ -7,7 +7,7 @@ if (typeof window.AppConfig === 'undefined') {
 }
 
 const Config = window.AppConfig || {};
-const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES, WAR_TOPICS } = Config;
+const { FIREBASE_CONFIG, COLLECTION_NAMES, SEED_DATA, SEED_GROUPS, SEED_ACTIVITIES, JOB_STRUCTURE, JOB_STYLES } = Config;
 
 // --- 2. 應用程式核心邏輯 ---
 
@@ -18,8 +18,6 @@ const App = {
     currentFilter: 'all', currentJobFilter: 'all', 
     currentSquadRoleFilter: 'all', 
     currentModalRoleFilter: 'all', 
-    currentWarTopicFilter: 'gvg', // 預設為 GVG
-    currentWarDateFilter: 'all',
     mode: 'demo', userRole: 'guest',
     currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
 
@@ -31,22 +29,15 @@ const App = {
         this.initFirebase();
         this.updateAdminUI();
         this.populateJobSelects();
-        this.populateWarSelects(); // 新增：初始化團體戰篩選器
         this.switchTab('home');
     },
 
     // --- (關鍵修復) 資料標準化函數 ---
-    // 無論資料從哪裡來(Local/Firebase)，都要經過這裡清洗
     normalizeMemberData: function(m) {
-        // 1. 檢查是否為初始種子成員 (依照 ID 對照)
         const seedIndex = SEED_DATA.findIndex(seed => seed.id === m.id);
-        
         if (seedIndex !== -1) {
-            // 是元老：強制賦予固定且很舊的時間戳記 (依照 SEED 順序)
-            // m01 = base, m02 = base + 1000ms...
             return { ...m, createdAt: this.BASE_TIME + (seedIndex * 1000) };
         } else {
-            // 是新成員：如果沒有時間戳記，給予現在時間；如果有，保持原樣
             return { ...m, createdAt: m.createdAt || Date.now() };
         }
     },
@@ -61,14 +52,9 @@ const App = {
         const storedHistory = localStorage.getItem('row_mod_history');
         
         let rawMembers = storedMem ? JSON.parse(storedMem) : SEED_DATA;
-        
-        // 應用標準化邏輯
         this.members = rawMembers.map(m => this.normalizeMemberData(m));
 
-        // 新增 group 類型和預設值
-        let rawGroups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
-        this.groups = rawGroups.map(g => ({ ...g, type: g.type || 'groups', topic: g.topic || 'gvg', date: g.date || '' }));
-
+        this.groups = storedGrp ? JSON.parse(storedGrp) : SEED_GROUPS;
         this.activities = storedAct ? JSON.parse(storedAct) : (SEED_ACTIVITIES || []);
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         
@@ -97,14 +83,10 @@ const App = {
     syncWithFirebase: function() {
         if (!this.db || this.mode !== 'firebase') return;
         
-        // --- (關鍵修復) 在接收雲端資料時，同樣執行標準化 ---
         this.db.collection(COLLECTION_NAMES.MEMBERS).onSnapshot(snap => { 
             const rawArr = []; 
             snap.forEach(d => rawArr.push({ id: d.id, ...d.data() })); 
-            
-            // 這裡也要跑一次 normalize，防止雲端舊資料覆蓋本地正確排序
             const fixedArr = rawArr.map(m => this.normalizeMemberData(m));
-            
             this.members = this.sortMembers(fixedArr); 
             this.saveLocal('members'); 
             this.render(); 
@@ -112,10 +94,8 @@ const App = {
         
         this.db.collection(COLLECTION_NAMES.GROUPS).onSnapshot(snap => { 
             const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() })); 
-            // 新增 group 類型和預設值
-            this.groups = arr.map(g => ({ ...g, type: g.type || 'groups', topic: g.topic || 'gvg', date: g.date || '' }));
+            this.groups = arr; 
             this.saveLocal('groups'); 
-            this.populateWarSelects(); // 更新篩選器
             this.render(); 
         });
         
@@ -129,14 +109,11 @@ const App = {
         }
     },
 
-    // 排序：由舊到新 (Ascending)
     sortMembers: function(membersArray) {
         return membersArray.sort((a, b) => {
             const timeA = a.createdAt || 0;
             const timeB = b.createdAt || 0;
-            if (timeA !== timeB) {
-                return timeA - timeB; // 小的(舊的)在前
-            }
+            if (timeA !== timeB) return timeA - timeB; 
             return (a.id || '').localeCompare(b.id || '');
         });
     },
@@ -192,47 +169,22 @@ const App = {
 
     switchTab: function(tab) {
         this.currentTab = tab;
-        ['home','members','wars','groups','activity'].forEach(v => {
+        ['home','members','groups','activity', 'leave'].forEach(v => {
             const el = document.getElementById('view-'+v);
             if(el) el.classList.add('hidden');
         });
-        
-        if(tab === 'wars' || tab === 'groups') {
-            document.getElementById('view-'+tab).classList.remove('hidden');
-        } else if(tab !== 'home') {
-             const el = document.getElementById('view-'+tab);
-             if(el) el.classList.remove('hidden');
-        } else {
-             document.getElementById('view-home').classList.remove('hidden');
-        }
+
+        if(tab === 'gvg' || tab === 'groups') document.getElementById('view-groups').classList.remove('hidden');
+        else document.getElementById('view-'+tab).classList.remove('hidden');
 
         document.getElementById('nav-container').classList.toggle('hidden', tab === 'home');
         document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
         const activeBtn = document.getElementById('tab-' + tab); if(activeBtn) activeBtn.classList.add('active');
 
-        // 處理警告訊息
-        const adminWarning = document.getElementById('adminWarning'); // 固定團 (Groups) 的警告
-        const adminWarWarning = document.getElementById('adminWarWarning'); // 團體戰 (Wars) 的警告
-        
-        if (tab === 'wars') {
-            this.currentSquadRoleFilter = 'all';
-            if (adminWarning) adminWarning.classList.add('hidden'); // 隱藏固定團警告
-            if (!['master', 'admin', 'commander'].includes(this.userRole)) { 
-                if(adminWarWarning) adminWarWarning.classList.remove('hidden'); 
-            } else { 
-                if(adminWarWarning) adminWarWarning.classList.add('hidden'); 
-            }
-        } else if (tab === 'groups') {
-            if (adminWarWarning) adminWarWarning.classList.add('hidden'); // 隱藏團體戰警告
-            if (!['master', 'admin', 'commander'].includes(this.userRole)) { 
-                if(adminWarning) adminWarning.classList.remove('hidden'); 
-            } else { 
-                if(adminWarning) adminWarning.classList.add('hidden'); 
-            }
-        } else {
-            if (adminWarning) adminWarning.classList.add('hidden');
-            if (adminWarWarning) adminWarWarning.classList.add('hidden');
-        }
+        // 權限檢查 & 初始化
+        const adminWarning = document.getElementById('adminWarning');
+        if (tab === 'gvg' && !['master', 'admin', 'commander'].includes(this.userRole)) { if(adminWarning) adminWarning.classList.remove('hidden'); } 
+        else { if(adminWarning) adminWarning.classList.add('hidden'); }
 
         const activityWarning = document.getElementById('activityAdminWarning');
         const addActivityBtn = document.getElementById('addActivityBtn');
@@ -241,12 +193,19 @@ const App = {
             else { if(addActivityBtn) addActivityBtn.classList.add('hidden'); if(activityWarning) activityWarning.classList.remove('hidden'); }
         }
 
+        // Leave Tab Init
+        if (tab === 'leave') {
+            this.initLeaveForm();
+        }
+
+        if(tab === 'gvg') { document.getElementById('groupViewTitle').innerText = 'GVG 攻城戰分組'; document.getElementById('squadModalTitle').innerText = 'GVG 分組管理'; } 
+        else if(tab === 'groups') { document.getElementById('groupViewTitle').innerText = '固定團列表'; document.getElementById('squadModalTitle').innerText = '固定團管理'; }
         this.render();
     },
 
     handleMainAction: function() { 
         if(this.currentTab === 'members') this.openAddModal();
-        else if(this.currentTab === 'wars' || this.currentTab === 'groups') {
+        else if(this.currentTab === 'gvg' || this.currentTab === 'groups') {
             if(['master', 'admin', 'commander'].includes(this.userRole)) this.openSquadModal(); 
             else alert("權限不足：僅有管理人員可建立隊伍");
         }
@@ -258,13 +217,110 @@ const App = {
     
     render: function() {
         if (this.currentTab === 'members') this.renderMembers();
-        else if (this.currentTab === 'wars') this.renderWars(); // 新增團體戰 render
-        else if (this.currentTab === 'groups') this.renderGroups(); // 獨立固定團 render
+        else if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.renderSquads();
         else if (this.currentTab === 'activity') this.renderActivities();
         const cnt = document.querySelector('#view-home .ro-menu-btn .ro-btn-content p'); if (cnt) cnt.innerText = `Guild Members (${this.members.length})`;
     },
 
-    // --- 成員相關邏輯 ---
+    // --- NEW: 請假管理邏輯 (Leave Management) ---
+    
+    initLeaveForm: function() {
+        const raidSelect = document.getElementById('leaveRaidSelect');
+        const memberSelect = document.getElementById('leaveMemberSelect');
+        const dateInput = document.getElementById('leaveDate');
+        const noteInput = document.getElementById('leaveNote');
+        const msg = document.getElementById('leaveSuccessMsg');
+        
+        // Reset Form
+        raidSelect.innerHTML = '<option value="" disabled selected>請選擇要請假的隊伍...</option>';
+        memberSelect.innerHTML = '<option value="">請先選擇隊伍</option>';
+        memberSelect.disabled = true;
+        dateInput.value = new Date().toISOString().split('T')[0]; // 預設今天
+        noteInput.value = '';
+        msg.classList.add('hidden');
+
+        // Populate Raids (GVG Groups Only)
+        // 這裡我們只列出 GVG 隊伍，因為通常請假是針對 GVG
+        const gvgGroups = this.groups.filter(g => g.type === 'gvg');
+        gvgGroups.forEach(g => {
+            raidSelect.innerHTML += `<option value="${g.id}">GVG - ${g.name}</option>`;
+        });
+    },
+
+    updateLeaveMemberSelect: function() {
+        const raidSelect = document.getElementById('leaveRaidSelect');
+        const memberSelect = document.getElementById('leaveMemberSelect');
+        const groupId = raidSelect.value;
+        
+        memberSelect.innerHTML = '<option value="" disabled selected>選擇人員...</option>';
+        
+        const group = this.groups.find(g => g.id === groupId);
+        if (!group) {
+            memberSelect.disabled = true;
+            return;
+        }
+
+        memberSelect.disabled = false;
+        group.members.forEach(m => {
+            const mid = typeof m === 'string' ? m : m.id;
+            const mem = this.members.find(x => x.id === mid);
+            if (mem) {
+                // 標示該成員目前的狀態
+                const currentStatus = (typeof m === 'object' && m.status === 'leave') ? '(已請假)' : '';
+                memberSelect.innerHTML += `<option value="${mid}">${mem.gameName} ${currentStatus}</option>`;
+            }
+        });
+    },
+
+    handleLeaveSubmit: function() {
+        const groupId = document.getElementById('leaveRaidSelect').value;
+        const memberId = document.getElementById('leaveMemberSelect').value;
+        const date = document.getElementById('leaveDate').value;
+        const note = document.getElementById('leaveNote').value;
+        
+        if (!groupId || !memberId || !date) {
+            alert("請完整填寫：隊伍、日期與人員。");
+            return;
+        }
+
+        const group = this.groups.find(g => g.id === groupId);
+        if (!group) return;
+
+        const index = group.members.findIndex(m => (typeof m === 'string' ? m : m.id) === memberId);
+        if (index === -1) {
+            alert("該成員不在選擇的隊伍中！");
+            return;
+        }
+
+        // --- 核心連動邏輯 ---
+        // 直接更新該成員在該 Group 中的狀態物件
+        let m = group.members[index];
+        if (typeof m === 'string') {
+            m = { id: m, status: 'leave', subId: null, leaveDate: date, leaveNote: note };
+        } else {
+            // 強制覆蓋為請假狀態
+            m.status = 'leave';
+            m.leaveDate = date;
+            m.leaveNote = note;
+            // 清除之前的準備狀態，但保留 subId (如果有替補的話)
+        }
+        
+        group.members[index] = m;
+        
+        // 儲存變更
+        this.saveGroupUpdate(group);
+        this.logChange('新增請假', `${date} - ${note}`, memberId);
+
+        // UI 反饋
+        const msg = document.getElementById('leaveSuccessMsg');
+        msg.classList.remove('hidden');
+        setTimeout(() => msg.classList.add('hidden'), 3000);
+        
+        // 重刷選單顯示狀態
+        this.updateLeaveMemberSelect();
+    },
+
+    // --- 成員相關邏輯 (保持不變) ---
     renderMembers: function() {
         const grid = document.getElementById('memberGrid');
         const searchVal = document.getElementById('searchInput').value.toLowerCase();
@@ -284,9 +340,8 @@ const App = {
         let rankBadge = item.rank === '會長' ? `<span class="rank-badge rank-master">會長</span>` : item.rank === '指揮官' ? `<span class="rank-badge rank-commander">指揮官</span>` : item.rank === '資料管理員' ? `<span class="rank-badge rank-admin">管理</span>` : '';
         const memberSquads = this.groups.filter(g => g.members.some(m => (typeof m === 'string' ? m : m.id) === item.id));
         const squadBadges = memberSquads.map(s => {
-            const color = s.type === 'wars' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100';
-            const namePrefix = s.type === 'wars' ? '團戰' : '固定團';
-            return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]" title="${s.name}">${namePrefix}: ${s.name}</span>`;
+            const color = s.type === 'gvg' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100';
+            return `<span class="${color} text-[10px] px-1.5 rounded border truncate inline-block max-w-[80px]">${s.name}</span>`;
         }).join('');
         
         const getRoleBadge = (r) => r.includes('輸出') ? `<span class="tag tag-dps">${r}</span>` : r.includes('坦') ? `<span class="tag tag-tank">${r}</span>` : r.includes('輔助') ? `<span class="tag tag-sup">${r}</span>` : '';
@@ -318,10 +373,7 @@ const App = {
     setFilter: function(f) { this.currentFilter = f; document.querySelectorAll('.filter-btn').forEach(b => b.className = (b.innerText.includes(f==='all'?'全部':f)||(f==='坦'&&b.innerText.includes('坦克'))||(f==='待定'&&b.innerText.includes('待定'))) ? "px-4 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-white transition whitespace-nowrap filter-btn active shadow-md" : "px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-blue-50 transition whitespace-nowrap filter-btn"); this.renderMembers(); },
     setJobFilter: function(j) { this.currentJobFilter = j; this.renderMembers(); },
     
-    setSquadRoleFilter: function(f) { this.currentSquadRoleFilter = f; this.render(); },
-
-    setWarTopicFilter: function(t) { this.currentWarTopicFilter = t; this.renderWars(); },
-    setWarDateFilter: function(d) { this.currentWarDateFilter = d; this.renderWars(); },
+    setSquadRoleFilter: function(f) { this.currentSquadRoleFilter = f; this.renderSquads(); },
 
     setModalRoleFilter: function(f) { 
         this.currentModalRoleFilter = f; 
@@ -403,11 +455,9 @@ const App = {
         };
         
         if (!id) {
-            // 新增成員：使用現在時間
             memberData.createdAt = Date.now();
             await this.addMember(memberData);
         } else {
-            // 編輯成員：保留原有的 createdAt
             const originalMember = this.members.find(m => m.id === id);
             memberData.createdAt = originalMember ? originalMember.createdAt : Date.now();
             await this.updateMember(id, memberData);
@@ -453,13 +503,11 @@ const App = {
         
         this.members = this.members.filter(d => d.id !== id); 
         
-        // 清理 Groups
         this.groups.forEach(g => {
             g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id);
             if (g.leaderId === id) { g.leaderId = null; } 
         });
         
-        // 清理 Activities (保留紀錄，標記已退會)
         this.activities.forEach(a => {
             a.winners = a.winners.map(w => {
                 if (w.memberId === id) {
@@ -495,81 +543,17 @@ const App = {
         this.closeModal('editModal');
     },
 
-    // --- 3. 固定團 / 團體戰 邏輯 ---
+    // --- 3. 固定團 / GVG 邏輯 ---
 
-    // 新增：團體戰篩選器填充
-    populateWarSelects: function() {
-        const topicSelect = document.getElementById('warTopicSelect');
-        const dateSelect = document.getElementById('warDateSelect');
-        
-        if (topicSelect) {
-            topicSelect.innerHTML = WAR_TOPICS.map(t => `<option value="${t.key}">${t.name}</option>`).join('');
-            topicSelect.innerHTML += '<option value="custom_topic">新增主題...</option>';
-            topicSelect.value = this.currentWarTopicFilter;
-        }
-
-        if (dateSelect) {
-            const warGroups = this.groups.filter(g => g.type === 'wars' && g.date);
-            const dates = [...new Set(warGroups.map(g => g.date))].sort((a,b) => new Date(b) - new Date(a));
-            
-            dateSelect.innerHTML = '<option value="all">所有日期</option>';
-            dates.forEach(d => dateSelect.innerHTML += `<option value="${d}">${d}</option>`);
-            dateSelect.value = this.currentWarDateFilter;
-        }
-    },
-    
-    // 獨立的團體戰渲染
-    renderWars: function() {
-        const search = document.getElementById('warSearchInput').value.toLowerCase();
-        const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
-        const grid = document.getElementById('warGrid');
-        const emptyMsg = document.getElementById('noWarsMsg');
-        
-        // 過濾團體戰隊伍
-        let visibleGroups = this.groups.filter(g => g.type === 'wars');
-        
-        // 主題篩選
-        if (this.currentWarTopicFilter !== 'all') {
-             visibleGroups = visibleGroups.filter(g => g.topic === this.currentWarTopicFilter);
-        }
-        
-        // 日期篩選
-        if (this.currentWarDateFilter !== 'all') {
-            visibleGroups = visibleGroups.filter(g => g.date === this.currentWarDateFilter);
-        }
-
-        // 搜尋篩選
-        if (search) {
-            visibleGroups = visibleGroups.filter(g => {
-                if (g.name.toLowerCase().includes(search) || (g.note||'').toLowerCase().includes(search)) return true;
-                return g.members.some(m => {
-                    const mem = this.members.find(x => x.id === (typeof m === 'string' ? m : m.id));
-                    return mem && (
-                        mem.gameName.toLowerCase().includes(search) || 
-                        (mem.mainClass||'').toLowerCase().includes(search) ||
-                        (mem.role||'').includes(search)
-                    );
-                });
-            });
-        }
-
-        this.renderSquadGrid(grid, emptyMsg, visibleGroups, 'wars', canEdit);
-    },
-
-    // 獨立的固定團渲染
-    renderGroups: function() {
+    renderSquads: function() {
+        const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
-        const grid = document.getElementById('squadGrid');
-        const emptyMsg = document.getElementById('noSquadsMsg');
         
-        // 過濾固定團隊伍
-        let visibleGroups = this.groups.filter(g => g.type === 'groups');
-
-        // 搜尋篩選
+        let visibleGroups = this.groups.filter(g => (g.type || 'gvg') === type);
         if (search) {
             visibleGroups = visibleGroups.filter(g => {
-                if (g.name.toLowerCase().includes(search) || (g.note||'').toLowerCase().includes(search)) return true;
+                if (g.name.toLowerCase().includes(search)) return true;
                 return g.members.some(m => {
                     const mem = this.members.find(x => x.id === (typeof m === 'string' ? m : m.id));
                     return mem && (
@@ -580,13 +564,10 @@ const App = {
                 });
             });
         }
-        
-        this.renderSquadGrid(grid, emptyMsg, visibleGroups, 'groups', canEdit);
-    },
-    
-    // 通用的隊伍/團體戰渲染函數
-    renderSquadGrid: function(grid, emptyMsg, visibleGroups, type, canEdit) {
-        
+
+        const grid = document.getElementById('squadGrid');
+        const emptyMsg = document.getElementById('noSquadsMsg');
+
         const filterContainer = document.createElement('div');
         filterContainer.className = "col-span-1 lg:col-span-2 flex gap-2 mb-2 overflow-x-auto pb-1";
         const filters = [
@@ -603,7 +584,7 @@ const App = {
         }).join('');
 
         grid.innerHTML = '';
-        if (visibleGroups.length > 0) {
+        if (visibleGroups.length > 0 || this.currentSquadRoleFilter !== 'all') {
              grid.insertAdjacentHTML('beforeend', filterContainer.outerHTML);
         }
 
@@ -615,11 +596,15 @@ const App = {
                 const id = typeof m === 'string' ? m : m.id;
                 const status = typeof m === 'string' ? 'pending' : (m.status || 'pending');
                 const subId = typeof m === 'string' ? null : (m.subId || null);
+                // 讀取請假資訊
+                const leaveDate = typeof m === 'object' ? m.leaveDate : null;
+                const leaveNote = typeof m === 'object' ? m.leaveNote : null;
+
                 const mem = this.members.find(x => x.id === id);
-                return mem ? { ...mem, status, subId } : null;
+                return mem ? { ...mem, status, subId, leaveDate, leaveNote } : null;
             }).filter(x => x);
 
-            const isWar = type === 'wars';
+            const isGVG = type === 'gvg';
             
             const list = groupMembers.map(m => {
                 if (this.currentSquadRoleFilter !== 'all') {
@@ -634,7 +619,7 @@ const App = {
                 let actionUI = "";
                 let rowClass = "";
                 
-                if (isWar) {
+                if (isGVG) {
                     if (m.status === 'leave') rowClass = "row-leave";
 
                     let subUI = "";
@@ -649,11 +634,14 @@ const App = {
                         }
                     }
 
+                    // 燈號的 title 屬性：如果是請假狀態，顯示原因和日期
+                    const leaveTooltip = m.status === 'leave' ? `請假：${m.leaveDate || ''} ${m.leaveNote || ''}` : '請假 (Leave)';
+
                     actionUI = `
                         <div class="flex items-center gap-1">
                             ${subUI}
                             <div class="gvg-light bg-light-yellow ${m.status === 'leave' ? 'active' : ''}"
-                                 title="請假 (Leave)"
+                                 title="${leaveTooltip}"
                                  onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'leave')"></div>
                             <div class="gvg-light ${m.status === 'ready' ? 'bg-light-green active' : 'bg-light-red'}"
                                  title="狀態"
@@ -667,37 +655,29 @@ const App = {
                 return `<div class="flex items-center justify-between text-sm py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 px-3 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
             }).join('');
                 
-            const topicName = WAR_TOPICS.find(t => t.key === group.topic)?.name || '固定團';
-            const isGVG = group.topic === 'gvg';
-            
-            const headerClass = isWar ? 'header squad-card-gvg-header' : 'bg-blue-50 p-4 border-b border-blue-100';
-            const cardClass = isWar ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100';
+            const headerClass = isGVG ? 'header squad-card-gvg-header' : 'bg-blue-50 p-4 border-b border-blue-100';
+            const cardClass = isGVG ? 'squad-card-gvg' : 'bg-white rounded-xl shadow-sm border border-blue-100';
             const editBtn = canEdit ? `<button onclick="app.openSquadModal('${group.id}')" class="text-slate-400 hover:text-blue-600 p-1"><i class="fas fa-cog"></i></button>` : '';
             const copyBtn = `<button onclick="app.copySquadList('${group.id}')" class="text-slate-400 hover:text-green-600 p-1 ml-2" title="複製隊伍"><i class="fas fa-copy"></i></button>`;
 
             let footer = "";
             const leader = group.leaderId ? (this.members.find(m => m.id === group.leaderId)?.gameName || '未知') : '未指定';
             
-            let subtitle = "";
-            if (isWar) {
+            if (isGVG) {
                 const readyCount = groupMembers.filter(m => m.status === 'ready').length;
                 const leaveCount = groupMembers.filter(m => m.status === 'leave').length;
-                
-                subtitle = `<p class="text-xs mt-1 italic opacity-80">${topicName} ${group.date ? `(${group.date})` : ''} - ${group.note||''}</p>`;
-                
                 footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500">
                     <span class="text-blue-600">👑 隊長: ${leader}</span>
                     <div class="flex gap-2"><span class="text-green-600">🟢 ${readyCount}</span><span class="text-yellow-600">🟡 ${leaveCount}</span></div>
                 </div>`;
             } else { 
-                subtitle = `<p class="text-xs mt-1 italic opacity-80">${group.note||''}</p>`;
                 footer = `<div class="bg-white p-3 border-t border-slate-100 flex justify-between items-center shrink-0 text-xs font-bold text-slate-500">
                     <span class="text-blue-600">👑 隊長: ${leader}</span>
                     <span class="text-slate-400">成員 ${groupMembers.length} 人</span>
                 </div>`;
             }
 
-            return `<div class="${cardClass} flex flex-col h-full overflow-hidden"><div class="${headerClass} p-4 flex justify-between items-start rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3>${subtitle}</div><div class="flex items-center">${copyBtn}${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
+            return `<div class="${cardClass} flex flex-col h-full overflow-hidden"><div class="${headerClass} p-4 flex justify-between items-center rounded-t-[7px]"><div><h3 class="text-xl font-bold">${group.name}</h3><p class="text-xs mt-1 italic opacity-80">${group.note||''}</p></div><div class="flex items-center">${copyBtn}${editBtn}</div></div><div class="flex-grow p-1 overflow-y-auto max-h-80">${list.length?list:'<p class="text-sm text-slate-400 text-center py-4">無成員 (或被篩選隱藏)</p>'}</div>${footer}</div>`;
         }).join('');
         grid.insertAdjacentHTML('beforeend', groupsHTML);
     },
@@ -738,39 +718,15 @@ const App = {
     },
     
     openSquadModal: function(id) {
-        const type = this.currentTab === 'wars' ? 'wars' : 'groups';
+        const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         if(!['master', 'admin', 'commander'].includes(this.userRole)) return; 
 
         document.getElementById('squadId').value = id || ''; 
         document.getElementById('squadType').value = type;
         document.getElementById('memberSearch').value = '';
-        document.getElementById('squadModalTitle').innerText = id ? (type === 'wars' ? '編輯團體戰分組' : '編輯固定團') : (type === 'wars' ? '新增團體戰分組' : '新增固定團');
-        
-        const warFieldsContainer = document.getElementById('squadWarFields');
-        warFieldsContainer.innerHTML = ''; // 清空
+        document.getElementById('squadModalTitle').innerText = id ? '編輯隊伍' : '新增隊伍';
 
         this.currentModalRoleFilter = 'all';
-
-        // 渲染團體戰專屬欄位
-        if (type === 'wars') {
-            const topicOptions = WAR_TOPICS.map(t => `<option value="${t.key}">${t.name}</option>`).join('');
-            warFieldsContainer.innerHTML = `
-                <div class="col-span-2">
-                    <label class="block text-xs text-slate-500 mb-1 font-bold">團戰主題</label>
-                    <div class="relative">
-                        <select id="squadTopic" class="w-full bg-slate-50 border-0 rounded-xl p-3 outline-none font-bold focus:ring-2 focus:ring-red-200">
-                            ${topicOptions}
-                        </select>
-                        <i class="fas fa-chevron-down absolute right-3 top-4 text-slate-400 pointer-events-none"></i>
-                    </div>
-                </div>
-                <div class="col-span-2">
-                    <label class="block text-xs text-slate-500 mb-1 font-bold">日期</label>
-                    <input type="date" id="squadDate" class="w-full bg-slate-50 border-0 rounded-xl p-3 font-bold outline-none focus:ring-2 focus:ring-red-200">
-                </div>
-            `;
-        }
-
 
         const searchInput = document.getElementById('memberSearch');
         if (searchInput && !document.getElementById('modalFilterContainer')) {
@@ -807,24 +763,11 @@ const App = {
             if(leaderSelect) {
                 leaderSelect.value = g.leaderId || "";
             }
-            
-            // 團體戰專屬欄位賦值
-            if (type === 'wars') {
-                 document.getElementById('squadTopic').value = g.topic || 'gvg';
-                 document.getElementById('squadDate').value = g.date || '';
-            }
-            
         } else {
             document.getElementById('squadName').value = ''; document.getElementById('squadNote').value = '';
             document.getElementById('deleteSquadBtnContainer').innerHTML = '';
             this.currentSquadMembers = [];
             this.renderSquadMemberSelect();
-            
-            // 團體戰專屬欄位預設值
-            if (type === 'wars') {
-                 document.getElementById('squadTopic').value = 'gvg';
-                 document.getElementById('squadDate').value = new Date().toISOString().slice(0, 10); // 預設今天
-            }
         }
         
         app.showModal('squadModal');
@@ -832,7 +775,7 @@ const App = {
 
     toggleSquadMember: function(id) {
         const index = this.currentSquadMembers.findIndex(m => m.id === id);
-        const limit = this.currentTab === 'wars' ? 5 : 12;
+        const limit = this.currentTab === 'gvg' ? 5 : 12;
 
         if (index > -1) { this.currentSquadMembers.splice(index, 1); } 
         else { 
@@ -860,7 +803,7 @@ const App = {
         filtered.sort((a,b) => (isSelected(a.id) === isSelected(b.id)) ? 0 : isSelected(a.id) ? -1 : 1);
         
         const count = this.currentSquadMembers.length;
-        const limit = this.currentTab === 'wars' ? 5 : 12;
+        const limit = this.currentTab === 'gvg' ? 5 : 12;
         document.getElementById('selectedCount').innerText = `${count}/${limit}`;
         
         document.getElementById('squadMemberSelect').innerHTML = filtered.map(m => {
@@ -915,16 +858,9 @@ const App = {
         const selectedMembers = [...this.currentSquadMembers];
         
         if(!name) { alert("請輸入隊伍名稱"); return; }
-        if (type === 'wars' && selectedMembers.length !== 5) { alert("團體戰隊伍建議為 5 人 (目前: " + selectedMembers.length + ")"); }
+        if (type === 'gvg' && selectedMembers.length !== 5) { alert("GVG 隊伍建議為 5 人 (目前: " + selectedMembers.length + ")"); }
         
         const squadData = { name, note, members: selectedMembers, type, leaderId }; 
-        
-        // 團體戰專屬資料
-        if (type === 'wars') {
-             squadData.topic = document.getElementById('squadTopic').value;
-             squadData.date = document.getElementById('squadDate').value;
-        }
-        
         if (id) {
             if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).update(squadData); 
             else { const idx = this.groups.findIndex(g => g.id === id); if(idx !== -1) { this.groups[idx] = { ...this.groups[idx], ...squadData }; this.saveLocal('groups'); } }
@@ -932,9 +868,7 @@ const App = {
             if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).add(squadData); 
             else { squadData.id = 'g_' + Date.now(); this.groups.push(squadData); this.saveLocal('groups'); }
         }
-        this.logChange(id ? '隊伍更新' : '建立隊伍', `${name}`, id || 'new'); 
-        this.populateWarSelects(); // 確保日期和主題篩選器更新
-        this.closeModal('squadModal');
+        this.logChange(id ? '隊伍更新' : '建立隊伍', `${name}`, id || 'new'); this.closeModal('squadModal');
     },
 
     deleteSquad: async function(id) {
@@ -1109,12 +1043,9 @@ const App = {
         // 取得隊長名稱
         const leaderMem = g.leaderId ? this.members.find(m => m.id === g.leaderId) : null;
         const leaderName = leaderMem ? leaderMem.gameName : '未指定';
-        
-        const topicName = g.type === 'wars' ? (WAR_TOPICS.find(t => t.key === g.topic)?.name || '團體戰') : '固定團';
-        const dateStr = (g.type === 'wars' && g.date) ? ` - ${g.date}` : '';
 
         // 標題格式更新
-        let txt = `【${g.name}】(${topicName}${dateStr}) - 隊長：${leaderName}\n`;
+        let txt = `【${g.name}】 - 隊長：${leaderName}\n`;
         
         txt += g.members.map(m => {
             const isObj = typeof m !== 'string';
@@ -1122,7 +1053,6 @@ const App = {
             let targetId = originalId;
             let suffix = "";
 
-            // 核心邏輯：如果是請假(leave)且有替補(subId)，直接換成替補人員
             if (isObj && m.status === 'leave' && m.subId) {
                 targetId = m.subId;
                 suffix = "(替補)";

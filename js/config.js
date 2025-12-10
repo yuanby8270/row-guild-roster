@@ -20,7 +20,8 @@ const APP_ENV = 'production';
 const COLLECTION_NAMES = {
     MEMBERS: 'members',
     GROUPS: 'groups',
-    ACTIVITIES: 'activities', 
+    ACTIVITIES: 'activities',
+    LEAVE_REQUESTS: 'leave_requests' // [新增] 請假單集合
 };
 
 // --- Job / Role Configuration ---
@@ -39,14 +40,6 @@ const JOB_STRUCTURE = {
     "賢者": ["輔助", "法系", "其他"], "刺客": ["敏爆", "毒", "雙刀", "其他"], "流氓": ["脫裝", "輸出", "弓", "其他"],
     "槍手": ["一般", "其他"], "初心者": ["超級初心者", "其他"]
 };
-
-// --- 團體戰 (Wars) 配置 ---
-const WAR_TOPICS = [
-    { key: 'gvg', name: 'GVG (攻城戰)' },
-    { key: 'pve_dungeon', name: '副本團 (PVE)' },
-    { key: 'pvp_arena', name: '競技場 (PVP)' },
-    { key: 'other', name: '其他團戰' }
-];
 
 // --- Seed Data (初始資料) ---
 const SEED_DATA = [
@@ -75,7 +68,7 @@ const SEED_DATA = [
     { id: "m23", lineName: "陳嘉圻", gameName: "陳小圻", mainClass: "獵人(鳥)", role: "輸出", rank: "成員", intro: "大白鯊的朋友" },
     { id: "m24", lineName: "Leo", gameName: "藤井樹", mainClass: "法師(隕)", role: "輸出", rank: "成員", intro: "" },
     { id: "m25", lineName: "小涵", gameName: "妞妞甜八寶", mainClass: "神官(讚美)", role: "輔助", rank: "成員", intro: "大白鯊的母奶" },
-    { id: "m26", lineName: "星野悠（ホシノユウ）", gameName: "鐵匠", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "" },
+    { id: "m26", lineName: "星野悠（ホシノユウ）", gameName: "", mainClass: "鐵匠", role: "待定", rank: "成員", intro: "" },
     { id: "m27", lineName: "浩", gameName: "YT泰愛玩遊戲直bo", mainClass: "槍手", role: "輸出", rank: "成員", intro: "" },
     { id: "m28", lineName: "六六", gameName: "六六", mainClass: "十字軍(坦)", role: "坦", rank: "成員", intro: "" },
     { id: "m29", lineName: "灬森灬", gameName: "大雄", mainClass: "槍手", role: "輸出", rank: "成員", intro: "待領養孤兒" },
@@ -147,7 +140,7 @@ const SEED_ACTIVITIES = [
     }
 ];
 
-const APP_VERSION = '7.1'; // 版本號更新
+const APP_VERSION = '7.1'; // Bump version
 
 // 將所有配置變數掛載到全域物件 (window.AppConfig)，供 app.js 存取
 window.AppConfig = {
@@ -156,7 +149,6 @@ window.AppConfig = {
     COLLECTION_NAMES,
     JOB_STYLES,
     JOB_STRUCTURE,
-    WAR_TOPICS, // 新增 WAR_TOPICS
     SEED_DATA,
     SEED_GROUPS,
     SEED_ACTIVITIES,
