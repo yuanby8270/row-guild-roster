@@ -1,4 +1,4 @@
-// app.js - Final Version (Fix: Substitute Member Validation)
+// app.js - Optimized History Retention (14 Days)
 
 if (typeof window.AppConfig === 'undefined') {
     console.error("Configuration (config.js) not loaded.");
@@ -19,6 +19,7 @@ const App = {
     currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
     leaves: [], // 預先請假資料
     BASE_TIME: new Date('2023-01-01').getTime(),
+    CLEANUP_DAYS: 14, // [New] 修改紀錄保留天數
 
     init: async function() {
         try {
@@ -55,6 +56,10 @@ const App = {
         this.leaves = storedLeaves ? JSON.parse(storedLeaves) : [];
         this.history = storedHistory ? JSON.parse(storedHistory) : [];
         if (storedThemes) this.raidThemes = JSON.parse(storedThemes);
+        
+        // [New] 載入時自動清理過期紀錄
+        this.cleanOldHistory();
+        
         this.members = this.sortMembers(this.members);
     },
 
@@ -114,9 +119,27 @@ const App = {
         }
     },
     
+    // [New] 清理過期紀錄 (保留 14 天)
+    cleanOldHistory: function() {
+        const now = Date.now();
+        const cutoff = now - (this.CLEANUP_DAYS * 24 * 60 * 60 * 1000);
+        const originalCount = this.history.length;
+        
+        this.history = this.history.filter(log => log.timestamp >= cutoff);
+        
+        if (this.history.length < originalCount) {
+            console.log(`已清理 ${originalCount - this.history.length} 筆過期紀錄`);
+            this.saveLocal('history'); // 立即儲存清理後的結果
+        }
+    },
+    
     logChange: function(action, details, targetId) {
+        // 寫入前先清理一次，確保不會無限增長
+        this.cleanOldHistory();
+        
         const log = { timestamp: Date.now(), user: this.userRole, action, details, targetId: targetId || 'N/A' };
-        this.history.unshift(log); this.saveLocal('history'); 
+        this.history.unshift(log); 
+        this.saveLocal('history'); 
     },
 
     openLoginModal: function() {
@@ -146,12 +169,10 @@ const App = {
         const rankSelect = document.getElementById('rank'), lockIcon = document.getElementById('rankLockIcon');
         if (this.userRole === 'master') { if (rankSelect) rankSelect.disabled = false; if (lockIcon) lockIcon.className = "fas fa-unlock text-blue-500 text-xs ml-2"; } 
         else { if (rankSelect) rankSelect.disabled = true; if (lockIcon) lockIcon.className = "fas fa-lock text-slate-300 text-xs ml-2"; }
-        
         const addSubBtn = document.getElementById('addSubjectBtn');
         const delSubBtn = document.getElementById('delSubjectBtn');
         if (addSubBtn) { if (this.userRole === 'master') addSubBtn.classList.remove('hidden'); else addSubBtn.classList.add('hidden'); }
         if (delSubBtn) { if (this.userRole === 'master') delSubBtn.classList.remove('hidden'); else delSubBtn.classList.add('hidden'); }
-        
         this.render();
     },
 
@@ -236,7 +257,6 @@ const App = {
         
         const searchInput = document.getElementById('preLeaveSearchInput'); if(searchInput) searchInput.classList.add('hidden');
         
-        // 連動最新主題選項 + 預先請假
         const fs = document.getElementById('leaveFilterSubject');
         if(fs) {
             let opts = '<option value="">所有主題</option>';
@@ -443,7 +463,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    // [Updated] 替補人員防呆：新增隊伍時，已加入其他隊伍的替補人員需隱藏
+    // --- 隊伍管理核心邏輯 (Updated: 替補人員選單防呆) ---
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -472,7 +492,7 @@ const App = {
                     if (m.status === 'leave') {
                         if (canEdit) { 
                             let busyIds = [];
-                            // [Fix] 這裡加入檢查替補人員是否忙碌的邏輯
+                            // [Fix] 加入檢查替補人員是否忙碌的邏輯
                             if (group.date) {
                                 this.groups.forEach(g => {
                                     if (g.type === (group.type||'gvg') && g.date === group.date && g.id !== group.id) {
@@ -584,7 +604,7 @@ const App = {
         // 1. 找出當日「預先請假」的人員
         const preLeaveMembers = this.leaves.filter(l => l.date === targetDate).map(l => l.memberId);
 
-        // 2. 找出當日「已在其他隊伍」的人員 (含替補人員!)
+        // 2. 找出當日「已在其他隊伍」的人員 (僅針對 GVG 類型)
         let busyMembers = [];
         if (currentType === 'gvg' && targetDate) {
             this.groups.forEach(g => {
