@@ -4,10 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>RO:W 公會名冊</title>
-   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 5 L10 20 V50 C10 75 50 95 50 95 C50 95 90 75 90 50 V20 L50 5 Z' fill='%233b82f6'/><text x='50' y='65' font-size='50' text-anchor='middle' fill='white' font-family='sans-serif' font-weight='900'>W</text></svg>">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#dbeafe">
+    <meta name="theme-color" content="#e2e8f0">
     <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Varela+Round&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -15,22 +14,16 @@
     <script>
         tailwind.config = {
             theme: {
-                extend: {
-                    colors: { ro: { primary: '#3b82f6', bg: '#eff6ff' } },
-                    fontFamily: { 'cute': ['"ZCOOL KuaiLe"', 'cursive'], 'sans': ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'] }
-                }
+                extend: { colors: { ro: { primary: '#3b82f6', bg: '#eff6ff' } }, fontFamily: { 'cute': ['"ZCOOL KuaiLe"', 'cursive'], 'sans': ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'] } }
             }
         };
     </script>
 </head>
 <body class="bg-ro-bg min-h-screen pt-4 pb-20 relative font-sans text-slate-600 selection:bg-blue-100">
-    <div class="fixed inset-0 z-[-1] overflow-hidden pointer-events-none bg-gradient-to-b from-blue-50 to-white">
-        <div class="absolute top-0 left-0 w-full h-full opacity-40" style="background-image: radial-gradient(#bae6fd 2px, transparent 2px); background-size: 30px 30px;"></div>
-    </div>
 
-    <nav class="bg-white/80 backdrop-blur-lg border-b border-white/60 sticky top-0 z-50 px-4 py-3 flex justify-between items-center shadow-sm safe-area-top">
+    <nav class="bg-white/90 backdrop-blur-lg border-b border-slate-200 sticky top-0 z-50 px-4 py-3 flex justify-between items-center shadow-sm safe-area-top">
         <div class="flex items-center space-x-3 cursor-pointer group" onclick="app.switchTab('home')">
-            <div class="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md group-active:scale-95 transition font-cute border-2 border-slate-700">Zzz</div>
+            <div class="w-9 h-9 bg-slate-800 rounded-lg flex items-center justify-center text-white font-bold text-lg shadow-md group-active:scale-95 transition font-cute border-2 border-slate-700">W</div>
             <div><h1 class="text-lg font-black text-slate-700 leading-tight tracking-tight font-cute">RO:W</h1></div>
         </div>
         <div class="flex items-center space-x-2">
@@ -43,7 +36,7 @@
         </div>
     </nav>
 
-    <div class="bg-white/60 backdrop-blur-md border-b border-white/40 sticky top-[64px] z-40 shadow-sm" id="nav-container">
+    <div class="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-[64px] z-40 shadow-sm" id="nav-container">
         <div class="container mx-auto px-4 py-2 flex space-x-2 overflow-x-auto scroll-hide">
             <button onclick="app.switchTab('home')" id="tab-home" class="nav-pill"><i class="fas fa-home mr-1"></i> 首頁</button>
             <button onclick="app.switchTab('members')" id="tab-members" class="nav-pill"><i class="fas fa-users mr-1"></i> 名冊</button>
@@ -56,69 +49,48 @@
     
     <main class="flex-grow container mx-auto p-4 md:p-6 space-y-6 max-w-5xl safe-area-bottom">
         <div id="view-home" class="animate-fade-in">
-            <div class="text-center py-10 mb-2 relative">
+             <div class="text-center py-10 mb-2 relative">
                 <div class="relative mx-auto w-full max-w-[320px] h-[180px] drop-shadow-2xl hover:scale-[1.02] transition duration-500 ease-out cursor-pointer">
-                    <svg viewBox="0 0 320 180" class="w-full h-full overflow-visible">
-                        <defs>
-                            <linearGradient id="textGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF" /><stop offset="100%" stop-color="#E2E8F0" /></linearGradient>
-                            <filter id="hardShadow" x="-20%" y="-20%" width="140%" height="140%"><feFlood flood-color="#1E293B" flood-opacity="0.2"/><feComposite operator="in" in2="SourceGraphic"/><feOffset dx="4" dy="6" result="shadow"/><feComposite in2="shadow" operator="over" in="SourceGraphic"/></filter>
-                        </defs>
-                        <g filter="url(#hardShadow)">
-                            <text x="160" y="140" text-anchor="middle" font-family="'ZCOOL KuaiLe', cursive" font-size="110" stroke="#1E293B" stroke-width="16" stroke-linejoin="round" fill="#1E293B">躺平</text>
-                            <text x="160" y="140" text-anchor="middle" font-family="'ZCOOL KuaiLe', cursive" font-size="110" fill="url(#textGrad)" stroke="#1E293B" stroke-width="0">躺平</text>
-                        </g>
-                        <g transform="translate(190, 35) rotate(10)">
-                            <ellipse cx="0" cy="20" rx="35" ry="25" fill="#FFF" stroke="#1E293B" stroke-width="4"/>
-                            <path d="M -20 5 Q -35 -20, -10 -30 Q 5 -20, -10 5" fill="#FFF" stroke="#1E293B" stroke-width="4" stroke-linejoin="round"/>
-                            <path d="M -18 -5 Q -25 -15, -12 -20" fill="none" stroke="#FDA4AF" stroke-width="3" stroke-linecap="round"/>
-                            <path d="M 10 5 Q 35 -20, 25 -35 Q 0 -30, 5 5" fill="#FFF" stroke="#1E293B" stroke-width="4" stroke-linejoin="round"/>
-                            <g transform="translate(0, 20)">
-                                <path d="M -15 0 L -5 0" stroke="#1E293B" stroke-width="3" stroke-linecap="round"/>
-                                <path d="M 5 0 L 15 0" stroke="#1E293B" stroke-width="3" stroke-linecap="round"/>
-                                <circle cx="0" cy="5" r="2" fill="#FDA4AF"/>
-                            </g>
-                            <g>
-                                <text x="30" y="-20" font-family="sans-serif" font-weight="900" font-size="20" fill="#3B82F6" stroke="#FFF" stroke-width="3" paint-order="stroke">Z<animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0s"/><animate attributeName="y" values="-20;-40" dur="2s" repeatCount="indefinite" begin="0s"/><animateTransform attributeName="transform" type="translate" values="0 0; 5 -5" dur="2s" repeatCount="indefinite"/></text>
-                                <text x="45" y="-35" font-family="sans-serif" font-weight="900" font-size="14" fill="#3B82F6" stroke="#FFF" stroke-width="3" paint-order="stroke">z<animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0.5s"/><animate attributeName="y" values="-35;-50" dur="2s" repeatCount="indefinite" begin="0.5s"/></text>
-                            </g>
-                        </g>
-                        <rect x="90" y="155" width="140" height="24" rx="12" fill="#3B82F6" stroke="#1E293B" stroke-width="3"/>
-                        <text x="160" y="172" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="12" fill="#FFF" letter-spacing="1">GUILD MEMBER</text>
-                    </svg>
+                    <svg viewBox="0 0 320 180" class="w-full h-full overflow-visible"><defs><linearGradient id="textGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF" /><stop offset="100%" stop-color="#E2E8F0" /></linearGradient><filter id="hardShadow" x="-20%" y="-20%" width="140%" height="140%"><feFlood flood-color="#1E293B" flood-opacity="0.2"/><feComposite operator="in" in2="SourceGraphic"/><feOffset dx="4" dy="6" result="shadow"/><feComposite in2="shadow" operator="over" in="SourceGraphic"/></filter></defs><g filter="url(#hardShadow)"><text x="160" y="140" text-anchor="middle" font-family="'ZCOOL KuaiLe', cursive" font-size="110" stroke="#1E293B" stroke-width="16" stroke-linejoin="round" fill="#1E293B">躺平</text><text x="160" y="140" text-anchor="middle" font-family="'ZCOOL KuaiLe', cursive" font-size="110" fill="url(#textGrad)" stroke="#1E293B" stroke-width="0">躺平</text></g><g transform="translate(190, 35) rotate(10)"><ellipse cx="0" cy="20" rx="35" ry="25" fill="#FFF" stroke="#1E293B" stroke-width="4"/><path d="M -20 5 Q -35 -20, -10 -30 Q 5 -20, -10 5" fill="#FFF" stroke="#1E293B" stroke-width="4" stroke-linejoin="round"/><path d="M -18 -5 Q -25 -15, -12 -20" fill="none" stroke="#FDA4AF" stroke-width="3" stroke-linecap="round"/><path d="M 10 5 Q 35 -20, 25 -35 Q 0 -30, 5 5" fill="#FFF" stroke="#1E293B" stroke-width="4" stroke-linejoin="round"/><g transform="translate(0, 20)"><path d="M -15 0 L -5 0" stroke="#1E293B" stroke-width="3" stroke-linecap="round"/><path d="M 5 0 L 15 0" stroke="#1E293B" stroke-width="3" stroke-linecap="round"/><circle cx="0" cy="5" r="2" fill="#FDA4AF"/></g><g><text x="30" y="-20" font-family="sans-serif" font-weight="900" font-size="20" fill="#3B82F6" stroke="#FFF" stroke-width="3" paint-order="stroke">Z<animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0s"/><animate attributeName="y" values="-20;-40" dur="2s" repeatCount="indefinite" begin="0s"/><animateTransform attributeName="transform" type="translate" values="0 0; 5 -5" dur="2s" repeatCount="indefinite"/></text><text x="45" y="-35" font-family="sans-serif" font-weight="900" font-size="14" fill="#3B82F6" stroke="#FFF" stroke-width="3" paint-order="stroke">z<animate attributeName="opacity" values="0;1;0" dur="2s" repeatCount="indefinite" begin="0.5s"/><animate attributeName="y" values="-35;-50" dur="2s" repeatCount="indefinite" begin="0.5s"/></text></g></g><rect x="90" y="155" width="140" height="24" rx="12" fill="#3B82F6" stroke="#1E293B" stroke-width="3"/><text x="160" y="172" text-anchor="middle" font-family="sans-serif" font-weight="900" font-size="12" fill="#FFF" letter-spacing="1">GUILD MEMBER</text></svg>
                 </div>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div onclick="app.switchTab('members')" class="menu-card group border-l-4 border-l-blue-500">
-                    <div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-book-open"></i></div><div><h3 class="text-lg font-black text-slate-700">成員名冊</h3><p class="text-xs text-slate-400 font-bold tracking-wider">MEMBER LIST</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition"></i></div>
-                </div>
-                <div onclick="app.switchTab('gvg')" class="menu-card group border-l-4 border-l-red-500">
-                    <div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-fist-raised"></i></div><div><h3 class="text-lg font-black text-slate-700">團體戰 (GVG)</h3><p class="text-xs text-slate-400 font-bold tracking-wider">RAID BATTLE</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-red-500 transition"></i></div>
-                </div>
-                <div onclick="app.switchTab('leave')" class="menu-card group border-l-4 border-l-orange-500">
-                    <div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-calendar-times"></i></div><div><h3 class="text-lg font-black text-slate-700">請假管理</h3><p class="text-xs text-slate-400 font-bold tracking-wider">LEAVE REQUEST</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-orange-500 transition"></i></div>
-                </div>
-                <div onclick="app.switchTab('groups')" class="menu-card group border-l-4 border-l-green-500">
-                    <div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-campground"></i></div><div><h3 class="text-lg font-black text-slate-700">固定團</h3><p class="text-xs text-slate-400 font-bold tracking-wider">DUNGEONS</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-green-500 transition"></i></div>
-                </div>
-                <div onclick="app.switchTab('activity')" class="menu-card group border-l-4 border-l-yellow-500">
-                    <div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-trophy"></i></div><div><h3 class="text-lg font-black text-slate-700">活動獎勵</h3><p class="text-xs text-slate-400 font-bold tracking-wider">REWARDS</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-yellow-500 transition"></i></div>
-                </div>
+                <div onclick="app.switchTab('members')" class="menu-card group border-l-4 border-l-blue-500"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-book-open"></i></div><div><h3 class="text-lg font-black text-slate-700">成員名冊</h3><p class="text-xs text-slate-400 font-bold tracking-wider">MEMBER LIST</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-blue-500 transition"></i></div></div>
+                <div onclick="app.switchTab('gvg')" class="menu-card group border-l-4 border-l-red-500"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-fist-raised"></i></div><div><h3 class="text-lg font-black text-slate-700">團體戰 (GVG)</h3><p class="text-xs text-slate-400 font-bold tracking-wider">RAID BATTLE</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-red-500 transition"></i></div></div>
+                <div onclick="app.switchTab('leave')" class="menu-card group border-l-4 border-l-orange-500"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-calendar-times"></i></div><div><h3 class="text-lg font-black text-slate-700">請假管理</h3><p class="text-xs text-slate-400 font-bold tracking-wider">LEAVE REQUEST</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-orange-500 transition"></i></div></div>
+                <div onclick="app.switchTab('groups')" class="menu-card group border-l-4 border-l-green-500"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-campground"></i></div><div><h3 class="text-lg font-black text-slate-700">固定團</h3><p class="text-xs text-slate-400 font-bold tracking-wider">DUNGEONS</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-green-500 transition"></i></div></div>
+                <div onclick="app.switchTab('activity')" class="menu-card group border-l-4 border-l-yellow-500"><div class="flex justify-between items-center"><div class="flex items-center gap-4"><div class="w-12 h-12 rounded-2xl bg-yellow-50 text-yellow-600 flex items-center justify-center text-xl group-hover:scale-110 transition duration-300 shadow-sm"><i class="fas fa-trophy"></i></div><div><h3 class="text-lg font-black text-slate-700">活動獎勵</h3><p class="text-xs text-slate-400 font-bold tracking-wider">REWARDS</p></div></div><i class="fas fa-chevron-right text-slate-300 group-hover:text-yellow-500 transition"></i></div></div>
             </div>
         </div>
         
         <div id="view-members" class="animate-fade-in hidden">
-            <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-users mr-2 text-blue-500"></i>成員名冊</h2><button onclick="app.handleMainAction()" class="bg-slate-800 hover:bg-slate-900 text-white shadow-lg px-3 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-slate-900"><i class="fas fa-user-plus mr-1"></i> 新增</button></div>
-            <div class="bg-white rounded-2xl p-3 mb-4 shadow-sm border border-slate-200 flex flex-col gap-3">
-                <div class="relative w-full"><i class="fas fa-search absolute left-3 top-3 text-slate-400"></i><input type="text" id="searchInput" oninput="app.renderMembers()" placeholder="搜尋名字、職業..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl pl-10 pr-4 py-2.5 outline-none font-bold focus:ring-2 focus:ring-blue-200 transition placeholder-slate-400"></div>
-                <div class="relative w-full"><select id="filterJob" onchange="app.setJobFilter(this.value)" class="w-full bg-slate-50 border-0 rounded-xl p-2.5 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-blue-200 transition"><option value="all">所有職業</option></select><i class="fas fa-chevron-down absolute right-3 top-3.5 text-slate-400 pointer-events-none"></i></div>
-                <div class="flex gap-2 overflow-x-auto pb-1 scroll-hide"><button onclick="app.setFilter('all')" class="filter-btn active">全部</button><button onclick="app.setFilter('輸出')" class="filter-btn">輸出</button><button onclick="app.setFilter('輔助')" class="filter-btn">輔助</button><button onclick="app.setFilter('坦')" class="filter-btn">坦克</button><button onclick="app.setFilter('待定')" class="filter-btn">待定</button></div>
+            <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-users mr-2 text-blue-500"></i>成員名冊</h2><button onclick="app.handleMainAction()" class="bg-slate-800 hover:bg-slate-900 text-white shadow-lg px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-slate-900 flex items-center"><i class="fas fa-user-plus mr-1"></i> 新增</button></div>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-blue-500 border-slate-100 mb-4 flex flex-col gap-3">
+                <div class="flex flex-col md:flex-row gap-3">
+                    <div class="relative w-full">
+                        <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                        <input type="text" id="searchInput" oninput="app.renderMembers()" placeholder="搜尋名字、職業..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl pl-10 pr-4 py-2.5 outline-none font-bold focus:ring-2 focus:ring-blue-200 transition placeholder-slate-400">
+                    </div>
+                    <div class="relative w-full md:w-48">
+                        <select id="filterJob" onchange="app.setJobFilter(this.value)" class="w-full bg-slate-50 border-0 rounded-xl p-2.5 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-blue-200 transition"><option value="all">所有職業</option></select>
+                        <i class="fas fa-chevron-down absolute right-3 top-3.5 text-slate-400 pointer-events-none"></i>
+                    </div>
+                </div>
+                <div class="flex gap-2 overflow-x-auto pb-1 scroll-hide pt-1">
+                    <button onclick="app.setFilter('all')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-white shadow-md filter-btn transition active:scale-95">全部</button>
+                    <button onclick="app.setFilter('輸出')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 filter-btn transition active:scale-95">輸出</button>
+                    <button onclick="app.setFilter('輔助')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 filter-btn transition active:scale-95">輔助</button>
+                    <button onclick="app.setFilter('坦')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 filter-btn transition active:scale-95">坦克</button>
+                    <button onclick="app.setFilter('待定')" class="px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-100 filter-btn transition active:scale-95">待定</button>
+                </div>
             </div>
+
             <div class="flex justify-between text-xs text-slate-400 mb-2 px-2 font-mono font-bold"><span id="memberCount">Total: 0</span><div class="space-x-2"><span>DPS: <span id="stat-dps" class="text-red-500">0</span></span><span>SUP: <span id="stat-sup" class="text-green-500">0</span></span><span>TNK: <span id="stat-tank" class="text-blue-500">0</span></span></div></div>
             <div id="memberGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
         </div>
-
-        <div id="view-leave" class="animate-fade-in hidden">
+<div id="view-leave" class="animate-fade-in hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-calendar-times mr-2 text-orange-500"></i>請假管理</h2>
                 <button onclick="app.toggleLeaveForm()" class="bg-orange-500 hover:bg-orange-600 text-white shadow-lg px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-orange-600 flex items-center"><i class="fas fa-plus mr-1"></i> 新增請假</button>
@@ -127,63 +99,35 @@
             <div id="leaveFormContainer" class="hidden mb-6 bg-white rounded-2xl shadow-lg p-6 border border-orange-100 relative overflow-hidden transition-all">
                 <div class="absolute top-0 right-0 w-24 h-24 bg-orange-50 rounded-full -mr-10 -mt-10 opacity-50 pointer-events-none"></div>
                 <h3 class="font-bold text-slate-700 mb-4 border-b border-orange-100 pb-2">填寫請假單</h3>
-                
                 <form id="leaveForm" onsubmit="event.preventDefault(); app.handleLeaveSubmit();" class="space-y-4 relative z-10">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 mb-1">1. 請假日期</label>
-                            <input type="date" id="leaveDateInput" onchange="app.updateLeaveSubjectSelect()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition" required>
-                        </div>
-                        
+                        <div><label class="block text-xs font-bold text-slate-500 mb-1">1. 請假日期</label><input type="date" id="leaveDateInput" onchange="app.updateLeaveSubjectSelect()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition" required></div>
                         <div>
                             <div class="flex items-center justify-between mb-1">
                                 <label class="block text-xs font-bold text-slate-500">2. 選擇主題</label>
-                                <label class="flex items-center space-x-1 cursor-pointer select-none">
-                                    <input type="checkbox" id="isPreLeave" onchange="app.togglePreLeaveMode()" class="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500">
-                                    <span class="text-xs font-bold text-orange-600">預先請假 (全日)</span>
-                                </label>
+                                <label class="flex items-center space-x-1 cursor-pointer select-none"><input type="checkbox" id="isPreLeave" onchange="app.togglePreLeaveMode()" class="w-4 h-4 text-orange-500 rounded border-gray-300 focus:ring-orange-500"><span class="text-xs font-bold text-orange-600">預先請假 (全日)</span></label>
                             </div>
-                            <div class="relative">
-                                <select id="leaveSubjectSelect" onchange="app.updateLeaveMemberSelect()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled>
-                                    <option value="" disabled selected>請先選日期</option>
-                                </select>
-                                <i class="fas fa-chevron-down absolute right-4 top-4 text-slate-400 pointer-events-none" id="subjectArrow"></i>
-                            </div>
+                            <div class="relative"><select id="leaveSubjectSelect" onchange="app.updateLeaveMemberSelect()" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled><option value="" disabled selected>請先選日期</option></select><i class="fas fa-chevron-down absolute right-4 top-4 text-slate-400 pointer-events-none" id="subjectArrow"></i></div>
                         </div>
                     </div>
-                    
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">3. 選擇人員</label>
+                    <div><label class="block text-xs font-bold text-slate-500 mb-1">3. 選擇人員</label>
                         <input type="text" id="preLeaveSearchInput" oninput="app.renderPreLeaveOptions(this.value)" placeholder="搜尋成員..." class="w-full mb-2 bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:ring-2 focus:ring-orange-200 hidden transition">
-                        
-                        <div class="relative">
-                            <select id="leaveMemberSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled>
-                                <option value="">請先完成上方選項</option>
-                            </select>
-                            <i class="fas fa-chevron-down absolute right-4 top-4 text-slate-400 pointer-events-none"></i>
-                        </div>
+                        <div class="relative"><select id="leaveMemberSelect" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition appearance-none" required disabled><option value="">請先完成上方選項</option></select><i class="fas fa-chevron-down absolute right-4 top-4 text-slate-400 pointer-events-none"></i></div>
                     </div>
-                    
-                    <div>
-                        <label class="block text-xs font-bold text-slate-500 mb-1">4. 事由 / 備註</label>
-                        <input type="text" id="leaveNote" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition" placeholder="例如：加班、聚餐...">
-                    </div>
-                    
-                    <div class="pt-2 flex justify-end gap-2">
-                        <button type="button" onclick="app.toggleLeaveForm()" class="px-4 py-2 text-slate-400 hover:text-slate-600 font-bold text-sm">取消</button>
-                        <button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-xl shadow-md active:scale-95 transition">送出</button>
-                    </div>
+                    <div><label class="block text-xs font-bold text-slate-500 mb-1">4. 事由 / 備註</label><input type="text" id="leaveNote" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-orange-200 transition" placeholder="例如：加班、聚餐..."></div>
+                    <div class="pt-2 flex justify-end gap-2"><button type="button" onclick="app.toggleLeaveForm()" class="px-4 py-2 text-slate-400 hover:text-slate-600 font-bold text-sm">取消</button><button type="submit" class="bg-orange-500 hover:bg-orange-600 text-white font-bold py-2 px-6 rounded-xl shadow-md active:scale-95 transition">送出</button></div>
                 </form>
             </div>
             
             <div id="leaveSuccessMsg" class="hidden mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-xl flex items-center animate-fade-in shadow-sm"><i class="fas fa-check-circle text-xl mr-3"></i><div><div class="font-bold">請假成功！</div><div class="text-xs">清單已更新。</div></div></div>
             
-            <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 mb-4 flex flex-col md:flex-row gap-3 items-center">
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-orange-500 border-slate-100 mb-4 flex flex-col md:flex-row gap-3 items-center">
                 <div class="relative w-full"><i class="fas fa-search absolute left-3 top-3 text-slate-400"></i><input type="text" id="leaveSearch" oninput="app.renderLeaveList()" placeholder="搜尋姓名..." class="w-full bg-slate-50 border-0 rounded-xl pl-10 pr-4 py-2.5 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-blue-200"></div>
                 <div class="relative w-full md:w-auto"><i class="fas fa-tag absolute left-3 top-3 text-slate-400"></i><select id="leaveFilterSubject" onchange="app.renderLeaveList()" class="w-full md:w-40 bg-slate-50 border-0 rounded-xl pl-10 pr-8 py-2.5 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-blue-200 appearance-none"><option value="">所有主題</option></select><i class="fas fa-chevron-down absolute right-3 top-3.5 text-slate-400 text-xs pointer-events-none"></i></div>
                 <div class="relative w-full md:w-auto"><i class="fas fa-calendar absolute left-3 top-3 text-slate-400"></i><input type="date" id="leaveFilterDate" onchange="app.renderLeaveList()" class="w-full md:w-40 bg-slate-50 border-0 rounded-xl pl-10 pr-4 py-2.5 outline-none font-bold text-slate-700 focus:ring-2 focus:ring-blue-200"></div>
                 <button onclick="document.getElementById('leaveFilterDate').value=''; app.renderLeaveList()" class="text-slate-400 hover:text-slate-600 text-xs font-bold whitespace-nowrap">清除日期</button>
             </div>
+            
             <div class="flex justify-between text-xs text-slate-400 mb-2 px-2 font-bold"><span>目前請假清單</span><span id="leaveCountBadge">0 人</span></div>
             <div id="leaveListGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3"></div>
             <div id="noLeaveMsg" class="hidden text-center py-10 text-slate-400"><i class="fas fa-coffee text-4xl mb-2 opacity-50"></i><p class="font-bold">目前沒有符合的請假紀錄</p></div>
@@ -192,11 +136,18 @@
         <div id="view-groups" class="hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-700" id="groupViewTitle">分組列表</h2>
-                <div class="flex gap-2">
-                     <div class="relative w-36"><i class="fas fa-search absolute left-3 top-2.5 text-slate-400 text-xs"></i><input type="text" id="groupSearchInput" oninput="app.renderSquads()" placeholder="搜尋..." class="w-full bg-white border border-slate-200 text-slate-800 rounded-lg pl-8 pr-3 py-2 text-xs outline-none focus:border-blue-300 transition"></div>
-                     <button onclick="app.handleMainAction()" class="bg-slate-800 hover:bg-slate-900 text-white shadow-lg px-3 py-2 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-slate-900"><i class="fas fa-plus mr-1"></i> 建隊</button>
-                </div>
             </div>
+            
+            <div id="groupControlPanel" class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-red-500 border-slate-100 mb-4 flex justify-between items-center transition-colors duration-300">
+                <div class="relative w-full md:w-64">
+                    <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                    <input type="text" id="groupSearchInput" oninput="app.renderSquads()" placeholder="搜尋隊伍或成員..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl pl-10 pr-4 py-2.5 outline-none font-bold focus:ring-2 focus:ring-blue-200 transition placeholder-slate-400">
+                </div>
+                <button onclick="app.handleMainAction()" class="bg-slate-800 hover:bg-slate-900 text-white shadow-md px-4 py-2.5 rounded-xl font-bold transition text-sm active:scale-95 border-2 border-slate-900 flex items-center whitespace-nowrap ml-3">
+                    <i class="fas fa-plus mr-1"></i> 建立隊伍
+                </button>
+            </div>
+
             <div id="adminWarning" class="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded-xl mb-4 text-xs flex items-center hidden"><i class="fas fa-lock mr-2 text-lg"></i><div><div class="font-bold">權限受限</div><div>僅有 會長、指揮官、管理員 可編輯此頁面。</div></div></div>
             <div id="squadGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></div>
             <div id="noSquadsMsg" class="hidden text-center py-20 text-slate-400"><div class="text-6xl mb-4 text-slate-200"><i class="fas fa-box-open"></i></div><p class="text-slate-400 font-bold">目前沒有隊伍</p></div>
@@ -205,9 +156,13 @@
         <div id="view-activity" class="hidden">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-trophy mr-2 text-yellow-500"></i>活動獎勵管理</h2>
-                <button onclick="app.handleMainAction()" id="addActivityBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white shadow-lg px-3 py-2 rounded-xl font-bold transition text-sm active:scale-95 hidden border-2 border-yellow-600"><i class="fas fa-plus mr-1"></i> 新增活動</button>
             </div>
-            <div id="activityAdminWarning" class="bg-red-50 border border-red-200 text-red-800 p-3 rounded-xl mb-4 text-xs flex items-center hidden"><i class="fas fa-lock mr-2 text-lg"></i><div><div class="font-bold">權限受限</div><div>此頁面操作 (發放獎勵) 僅限 **會長** 使用。</div></div></div>
+            
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-yellow-500 border-slate-100 mb-4 flex justify-end items-center">
+                 <div id="activityAdminWarning" class="bg-red-50 text-red-800 px-3 py-1 rounded text-xs flex items-center mr-auto hidden"><i class="fas fa-lock mr-2"></i> 僅限會長操作</div>
+                 <button onclick="app.handleMainAction()" id="addActivityBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white shadow-md px-4 py-2 rounded-xl font-bold transition text-sm active:scale-95 hidden border-b-4 border-yellow-700 flex items-center"><i class="fas fa-plus mr-1"></i> 新增活動</button>
+            </div>
+            
             <div id="activityList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
              <div id="noActivitiesMsg" class="hidden text-center py-20 text-slate-400"><div class="text-6xl mb-4 text-slate-200"><i class="fas fa-box-open"></i></div><p class="text-slate-400 font-bold">目前沒有活動</p></div>
         </div>
@@ -338,6 +293,7 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script> 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
     <script src="./js/config.js"></script> 
     <script type="module" src="./js/app.js"></script> 
 </body>
