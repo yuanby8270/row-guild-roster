@@ -1,37 +1,36 @@
-/* style.css - Layout Fix Version */
+/* style.css - Eye Protection & Unified UI Version */
 
 /* --- 全域設定 --- */
 body { 
-    background-color: #eff6ff; 
-    background-image: 
-        radial-gradient(at 0% 0%, hsla(253,16%,7%,0) 0, transparent 50%), 
-        radial-gradient(at 50% 0%, hsla(225,39%,30%,0) 0, transparent 50%), 
-        radial-gradient(at 100% 0%, hsla(339,49%,30%,0) 0, transparent 50%);
+    /* [護眼模式] 改用較深、不刺眼的灰藍色底 */
+    background-color: #e2e8f0; 
+    /* 移除原本過於花俏的背景紋路，改用純淨的柔和色調 */
     color: #334155; 
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
     -webkit-tap-highlight-color: transparent; 
     overflow-x: hidden;
 }
 
-/* 文字特效 */
-.title-effect {
-    color: #fff;
-    -webkit-text-stroke: 6px #3B82F6; 
-    paint-order: stroke fill;
-    filter: drop-shadow(0 4px 0px rgba(59, 130, 246, 0.5));
+/* 避免行動裝置字體縮放 */
+input, select, textarea { font-size: 16px !important; }
+
+/* 滾動條隱藏但保留功能 */
+.scroll-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+.scroll-hide::-webkit-scrollbar { display: none; }
+
+/* --- 統一的卡片風格 (Unified Card Design) --- */
+/* 用於搜尋列、控制台的白色底板 */
+.control-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    border: 1px solid #f1f5f9;
 }
 
-/* Glassmorphism */
-.glass-card {
-    background: rgba(255, 255, 255, 0.65);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    border-radius: 24px;
-    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-}
-
-/* Menu Card */
+/* 首頁選單卡片 */
 .menu-card {
     background: white;
     border: 1px solid #f1f5f9;
@@ -39,36 +38,43 @@ body {
     padding: 20px;
     position: relative;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s ease-in-out;
     cursor: pointer;
     overflow: hidden;
 }
-.menu-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #bfdbfe; }
+.menu-card:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-color: #cbd5e1; }
 .menu-card:active { transform: scale(0.98); }
 
-/* --- 修正：篩選按鈕佈局 --- */
-/* 強制按鈕不換行且不被壓縮 */
-.filter-btn {
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
+/* 成員/隊伍小卡 */
+.card { 
+    background: white; 
+    border: 1px solid #f1f5f9; 
+    border-radius: 16px; 
+    overflow: hidden;
+    transition: transform 0.1s, box-shadow 0.1s; 
+    display: flex; 
+    align-items: stretch;
+    height: auto; 
+    min-height: 95px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
+.card:active { transform: scale(0.98); }
+.card .tag-area { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 
-/* Scrollbar Hide but Keep Functionality */
-.scroll-hide {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-    display: flex;
-    gap: 0.5rem;
-    overflow-x: auto;
-    padding-bottom: 4px; /* 預留滾動空間 */
-    flex-wrap: nowrap; /* 強制不換行 */
+/* --- 元件樣式 --- */
+.nav-pill { 
+    padding: 8px 16px; font-weight: 700; color: #64748b; border-radius: 20px; 
+    transition: all 0.2s; white-space: nowrap; font-size: 0.9rem;
+    background: rgba(255,255,255,0.8); /* 增加透明度適應深色背景 */
 }
-.scroll-hide::-webkit-scrollbar { display: none; }
+.nav-pill.active { background-color: #3b82f6; color: white; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.4); }
 
-/* 避免行動裝置字體縮放 */
-input, select, textarea { font-size: 16px !important; }
+.filter-btn { white-space: nowrap !important; flex-shrink: 0 !important; }
 
-/* 職業配色 */
+/* --- 職業顏色 (保留原設定) --- */
+.job-stripe { width: 6px; flex-shrink: 0; }
+.job-icon-area { width: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; background-color: #f8fafc; border-right: 1px solid #f1f5f9; }
+
 .bg-job-knight, .bg-job-騎士 { background-color: #ff9999; color: #7f1d1d; }
 .bg-job-crusader, .bg-job-十字軍 { background-color: #ff6666; color: #450a0a; }
 .bg-job-blacksmith, .bg-job-鐵匠 { background-color: #ffcc99; color: #7c2d12; }
@@ -85,40 +91,15 @@ input, select, textarea { font-size: 16px !important; }
 .bg-job-rogue, .bg-job-流氓 { background-color: #b366ff; color: #3b0764; }
 .bg-job-default, .bg-job-初心者 { background-color: #cbd5e1; color: #475569; }
 
-/* Card Styles */
-.card { 
-    background: white; border: 1px solid #f1f5f9; border-radius: 16px; overflow: hidden;
-    transition: transform 0.1s, box-shadow 0.1s; display: flex; align-items: stretch;
-    height: auto; min-height: 95px; /* 修正高度問題 */
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-.card:active { transform: scale(0.98); }
-.card .tag-area { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
-
-.job-stripe { width: 6px; flex-shrink: 0; }
-.job-icon-area { width: 60px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; flex-shrink: 0; background-color: #f8fafc; border-right: 1px solid #f1f5f9; }
-
 .tag { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; font-weight: bold; margin-left: 4px; }
 .tag-dps { background: #fee2e2; color: #991b1b; }
 .tag-sup { background: #dcfce7; color: #166534; }
 .tag-tank { background: #dbeafe; color: #1e40af; }
-.tag-default { background: #f1f5f9; color: #475569; }
 
 .rank-badge { font-size: 0.6rem; padding: 1px 4px; border-radius: 3px; font-weight: bold; text-transform: uppercase; margin-right: 4px; border: 1px solid transparent; }
 .rank-master { background: #fef3c7; color: #b45309; border-color: #fcd34d; }
 .rank-commander { background: #fee2e2; color: #b91c1c; border-color: #fca5a5; }
 .rank-admin { background: #e0e7ff; color: #4338ca; border-color: #a5b4fc; }
-
-.modal-overlay { z-index: 100 !important; }
-
-/* Navigation Pills */
-.nav-pill { 
-    padding: 8px 16px; font-weight: 700; color: #64748b; border-radius: 20px; 
-    transition: all 0.2s; white-space: nowrap; font-size: 0.9rem;
-    background: rgba(255,255,255,0.5);
-}
-.nav-pill.active { background-color: #3b82f6; color: white; box-shadow: 0 4px 10px -2px rgba(59, 130, 246, 0.4); }
-#tab-leave.active { background-color: #f97316; color: white; box-shadow: 0 4px 10px -2px rgba(249, 115, 22, 0.4); }
 
 .copy-tooltip { position: relative; cursor: pointer; }
 .copy-tooltip::after { content: "已複製"; position: absolute; top: -30px; left: 50%; transform: translateX(-50%); background: #334155; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; opacity: 0; transition: opacity 0.2s; pointer-events: none; white-space: nowrap; z-index: 10; }
@@ -130,17 +111,10 @@ input, select, textarea { font-size: 16px !important; }
 .squad-card-gvg {
     background: white; border: 1px solid #e2e8f0; border-radius: 16px;
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-    position: relative; transition: transform 0.2s;
-    overflow: hidden;
+    position: relative; transition: transform 0.2s; overflow: hidden;
 }
 .squad-card-gvg:hover { transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
 .squad-card-gvg .header { background: #f8fafc; border-bottom: 1px solid #e2e8f0; color: #334155; padding: 15px; }
-
-.status-light { width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.3s; }
-.status-light.unclaimed { background-color: #ef4444; animation: pulse-red 2s infinite; }
-.status-light.claimed { background-color: #22c55e; cursor: default; }
-
-@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 
 .gvg-light {
     width: 20px; height: 20px; border-radius: 50%; border: 1px solid rgba(0,0,0,0.05);
@@ -154,14 +128,18 @@ input, select, textarea { font-size: 16px !important; }
 .bg-light-green { background-color: #22c55e; color: #22c55e; }
 .bg-light-yellow { background-color: #fbbf24; color: #fbbf24; }
 
-.sub-select { font-size: 0.75rem; padding: 2px 5px; border-radius: 6px; border: 1px solid #cbd5e1; background-color: #fff; color: #475569; max-width: 100px; animation: fadeIn 0.3s; }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
-
+.sub-select { font-size: 0.75rem; padding: 2px 5px; border-radius: 6px; border: 1px solid #cbd5e1; background-color: #fff; color: #475569; max-width: 100px; }
 .row-leave { background-color: #f8fafc; opacity: 0.6; }
 .row-leave .member-name { text-decoration: line-through; color: #94a3b8; }
 
-/* Page Transition Animation */
+.status-light { width: 24px; height: 24px; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.3s; }
+.status-light.unclaimed { background-color: #ef4444; animation: pulse-red 2s infinite; }
+.status-light.claimed { background-color: #22c55e; cursor: default; }
+
+@keyframes pulse-red { 0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); } 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
 @keyframes fadeInOpacity { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
 .animate-fade-in { animation: fadeInOpacity 0.4s ease-out forwards; }
+
+.modal-overlay { z-index: 100 !important; }
 
 @media (max-width: 640px) { .nav-pill { padding: 6px 12px; font-size: 0.8rem; } }
