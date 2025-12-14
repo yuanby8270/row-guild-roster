@@ -1,4 +1,5 @@
-// js/app.js - Part 1 (Core & Data Safety)
+// js/app.js
+// 完整修復版 v6.0 - 包含顏色修復、按鈕邏輯與資料保護
 import { jobData, firebaseConfig, initialMembers } from './config.js';
 
 const app = {
@@ -20,15 +21,17 @@ const app = {
     currentActivityId: null,
     tempWinners: [],
 
+    // 1. 初始化
     init() {
         console.log("App initializing...");
         this.loadFirebaseConfig();
     },
 
+    // 2. 設定讀取
     loadFirebaseConfig() {
         let config = localStorage.getItem('ro_firebase_config');
         
-        // 如果沒有設定，載入預設值
+        // 載入預設設定
         if (!config && firebaseConfig) {
             config = JSON.stringify(firebaseConfig);
             localStorage.setItem('ro_firebase_config', config);
@@ -37,7 +40,7 @@ const app = {
         if (config) {
             try {
                 const parsedConfig = JSON.parse(config);
-                // [修復] 防止 Firebase 重複初始化崩潰
+                // 檢查 Firebase 是否已存在，避免重複初始化崩潰
                 if (!firebase.apps.length) {
                     firebase.initializeApp(parsedConfig);
                 } else {
@@ -50,6 +53,7 @@ const app = {
                 if(configInput) configInput.value = JSON.stringify(parsedConfig, null, 2);
             } catch (e) {
                 console.error("Firebase init failed:", e);
+                // 初始化失敗時，轉為讀取本地資料
                 this.loadLocalData();
             }
         } else {
@@ -58,6 +62,7 @@ const app = {
         this.renderJobOptions();
     },
 
+    // 3. 即時監聽 (含資料保護)
     setupRealtimeListener() {
         if (!this.db) return;
         document.body.classList.add('is-rendering');
@@ -65,39 +70,30 @@ const app = {
         this.unsubscribe = this.db.collection('guildData').doc('main').onSnapshot(doc => {
             if (doc.exists) {
                 const cloudData = doc.data();
-                
-                // [修復] 資料保護：只有當雲端有資料時才覆蓋
                 if (cloudData) {
                     this.data = cloudData;
                 }
-
-                // 防呆初始化：確保陣列存在
-                if (!this.data.members) this.data.members = initialMembers || [];
-                if (!this.data.history) this.data.history = []; 
-                if (!this.data.leaveRecords) this.data.leaveRecords = [];
-                if (!this.data.squads) this.data.squads = [];
-                if (!this.data.activities) this.data.activities = [];
-
+                // 資料結構防呆
+                this.ensureDataStructure();
             } else {
-                // 如果雲端沒資料，先嘗試讀取本地，不要直接覆蓋成預設值
-                console.log("No cloud data, checking local...");
+                console.log("No cloud data, relying on local...");
                 this.loadLocalData();
                 this.saveData(); // 同步回雲端
             }
             this.renderAll();
             document.body.classList.remove('is-rendering');
         }, err => {
-            console.error("Firebase Connection Error:", err);
-            this.showToast('連線中斷，切換為本地模式', 'error');
+            console.error("Firebase Error:", err);
+            this.showToast('連線中斷，使用本地資料', 'error');
             document.body.classList.remove('is-rendering');
             this.loadLocalData();
         });
     },
 
+    // 4. 本地資料讀取
     loadLocalData() {
         const local = localStorage.getItem('ro_guild_data');
         if (local) {
-            console.log("Loading local data...");
             try {
                 this.data = JSON.parse(local);
             } catch(e) {
@@ -105,80 +101,36 @@ const app = {
                 this.data.members = initialMembers || [];
             }
         } else {
-            // 真的完全沒資料才載入預設
+            // 如果完全沒資料，才使用預設名單
             if (initialMembers) {
                 this.data.members = [...initialMembers];
             }
         }
-        
-        // 確保結構完整
-        if (!this.data.members) this.data.members = [];
-        if (!this.data.history) this.data.history = [];
-        if (!this.data.leaveRecords) this.data.leaveRecords = [];
-        if (!this.data.squads) this.data.squads = [];
-        if (!this.data.activities) this.data.activities = [];
-        
+        this.ensureDataStructure();
         this.renderAll();
     },
 
+    ensureDataStructure() {
+        if (!this.data.members) this.data.members = initialMembers || [];
+        if (!this.data.history) this.data.history = []; 
+        if (!this.data.leaveRecords) this.data.leaveRecords = [];
+        if (!this.data.squads) this.data.squads = [];
+        if (!this.data.activities) this.data.activities = [];
+    },
+
     saveData() {
-        // [修復] 寫入防呆，避免寫入空資料
-        if (!this.data.members) return;
+        if (!this.data.members) return; // 空資料不存
 
         if (this.db) {
             this.db.collection('guildData').doc('main').set(this.data)
-                .catch(e => this.showToast('儲存失敗: ' + e.message, 'error'));
+                .catch(e => this.showToast('儲存失敗', 'error'));
         } else {
             localStorage.setItem('ro_guild_data', JSON.stringify(this.data));
         }
         this.renderAll();
     },
 
-    saveConfig() {
-        const input = document.getElementById('firebaseConfigInput').value;
-        try {
-            JSON.parse(input); 
-            localStorage.setItem('ro_firebase_config', input);
-            location.reload();
-        } catch (e) {
-            this.showToast('JSON 格式錯誤', 'error');
-        }
-    },
-
-    resetToDemo() {
-        if(confirm('警告：這將清除所有設定並重置為預設值！確定嗎？')) {
-            localStorage.removeItem('ro_firebase_config');
-            localStorage.removeItem('ro_guild_data');
-            location.reload();
-        }
-    },
-
-    logHistory(action) {
-        const record = {
-            time: new Date().toLocaleString('zh-TW'),
-            user: this.user ? this.user.role : '訪客',
-            action: action
-        };
-        if (!this.data.history) this.data.history = [];
-        this.data.history.unshift(record);
-        if (this.data.history.length > 50) this.data.history.pop();
-    },
-
-    showHistoryModal() {
-        const list = document.getElementById('historyList');
-        const history = this.data.history || [];
-        list.innerHTML = history.map(h => `
-            <div class="text-sm border-b border-slate-100 pb-2">
-                <div class="flex justify-between text-slate-400 text-xs mb-1">
-                    <span>${h.time}</span>
-                    <span class="font-bold">${h.user}</span>
-                </div>
-                <div class="text-slate-700">${h.action}</div>
-            </div>
-        `).join('') || '<div class="text-center text-slate-400 py-4">無紀錄</div>';
-        this.showModal('historyModal');
-    },// js/app.js - Part 2 (UI & Rendering - 找回顏色)
-
+    // 5. 介面渲染總管
     renderAll() {
         this.renderMembers();
         this.renderLeaveList();
@@ -187,15 +139,16 @@ const app = {
         this.checkAdminUI();
     },
 
+    // 6. 分頁切換 (修復懸浮按鈕與 GVG 錯誤)
     switchTab(tab) {
-        // 1. 隱藏所有分頁
+        // 隱藏所有分頁
         document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
 
-        // 2. 決定要顯示哪個分頁 ID (容錯處理)
+        // 找尋目標分頁
         let targetId = `view-${tab}`;
         let targetEl = document.getElementById(targetId);
 
-        // [修復] 如果找不到 view-gvg，自動導向到 view-groups
+        // [防崩潰] 如果 HTML 裡沒有 view-gvg，自動導向 groups
         if (!targetEl && tab === 'gvg') {
             targetId = 'view-groups'; 
             targetEl = document.getElementById(targetId);
@@ -204,11 +157,11 @@ const app = {
         if (targetEl) {
             targetEl.classList.remove('hidden');
         } else {
-            console.error(`Error: View element ${targetId} not found.`);
-            // 不要 return，繼續執行以免按鈕狀態卡住
+            console.error(`Tab error: ${targetId} not found.`);
+            // 不 return，確保按鈕狀態能更新
         }
 
-        // 3. 更新上方導覽列按鈕樣式
+        // 更新導覽列樣式
         document.querySelectorAll('.nav-pill').forEach(el => {
             el.classList.remove('bg-slate-800', 'text-white', 'shadow-md');
             el.classList.add('text-slate-500', 'hover:bg-slate-100');
@@ -219,17 +172,16 @@ const app = {
             activeBtn.classList.remove('text-slate-500', 'hover:bg-slate-100');
         }
 
-        // [重要修復] 更新當前分頁狀態，讓懸浮按鈕知道該做什麼
         this.currentTab = tab;
         
-        // 4. FAB (懸浮按鈕) 控制
+        // [修復] 懸浮按鈕 (FAB) 顯示邏輯
         const fab = document.getElementById('mainActionBtn');
         if (fab) {
             if (tab === 'home') {
                 fab.classList.add('hidden');
             } else {
                 fab.classList.remove('hidden');
-                // 根據不同分頁設定按鈕顏色，確保視覺回饋
+                // 設定按鈕顏色與樣式
                 fab.className = `fab-btn w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-lg active:scale-90 transition border-4 border-slate-100 ${
                     tab === 'members' ? 'bg-blue-600 text-white hover:bg-blue-700' :
                     tab === 'gvg' ? 'bg-red-600 text-white hover:bg-red-700' :
@@ -242,112 +194,15 @@ const app = {
         }
     },
 
-    // [修復] 懸浮按鈕點擊事件分發
+    // 7. 懸浮按鈕動作分配
     handleMainAction() {
-        console.log("FAB Clicked, current tab:", this.currentTab);
         if (this.currentTab === 'members') this.openEditModal();
         else if (this.currentTab === 'gvg' || this.currentTab === 'groups') this.openSquadModal('fixed'); 
         else if (this.currentTab === 'leave') this.toggleLeaveForm();
         else if (this.currentTab === 'activity') this.openActivityModal();
     },
 
-    // --- Admin & Auth ---
-    openLoginModal() {
-        if (this.user) {
-            if(confirm('確定登出？')) {
-                this.user = null;
-                this.showToast('已登出');
-                this.checkAdminUI();
-            }
-        } else {
-            this.showModal('loginModal');
-        }
-    },
-    
-    handleLogin() {
-        const u = document.getElementById('loginUser').value;
-        const p = document.getElementById('loginPass').value;
-        if (u === 'admin' && p === '8888') {
-            this.user = { role: 'admin' };
-            this.showToast('管理員登入成功');
-            this.closeModal('loginModal');
-            document.getElementById('loginUser').value = '';
-            document.getElementById('loginPass').value = '';
-        } else if (u === 'master' && p === '0000') {
-            this.user = { role: 'master' };
-            this.showToast('會長登入成功');
-            this.closeModal('loginModal');
-        } else {
-            this.showToast('帳號或密碼錯誤', 'error');
-        }
-        this.checkAdminUI();
-    },
-
-    isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'master'); },
-    isMaster() { return this.user && this.user.role === 'master'; },
-    isAdminOrMaster() { return this.isAdmin(); },
-
-    checkAdminUI() {
-        const btn = document.getElementById('adminToggleBtn');
-        const controls = document.getElementById('adminControls');
-        const groupWarning = document.getElementById('adminWarning');
-        
-        if (this.user) {
-            btn.classList.add('text-blue-600', 'bg-blue-50');
-            btn.innerHTML = '<i class="fas fa-user-check"></i>';
-            controls.classList.remove('hidden');
-            if(groupWarning) groupWarning.classList.add('hidden');
-        } else {
-            btn.classList.remove('text-blue-600', 'bg-blue-50');
-            btn.innerHTML = '<i class="fas fa-user-shield"></i>';
-            controls.classList.add('hidden');
-            if(groupWarning) groupWarning.classList.remove('hidden');
-        }
-        
-        const actWarning = document.getElementById('activityAdminWarning');
-        const addActBtn = document.getElementById('addActivityBtn');
-        if (this.isMaster()) {
-            if(actWarning) actWarning.classList.add('hidden');
-            if(addActBtn) addActBtn.classList.remove('hidden');
-        } else {
-            if(actWarning) actWarning.classList.remove('hidden');
-            if(addActBtn) addActBtn.classList.add('hidden');
-        }
-        this.renderMembers(); 
-    },
-
-    // --- Members ---
-    renderJobOptions() {
-        const baseSel = document.getElementById('baseJobSelect');
-        baseSel.innerHTML = Object.keys(jobData).map(j => `<option value="${j}">${j}</option>`).join('');
-        this.updateSubJobSelect();
-    },
-
-    updateSubJobSelect() {
-        const base = document.getElementById('baseJobSelect').value;
-        const subSel = document.getElementById('subJobSelect');
-        const subs = jobData[base] || [];
-        subSel.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
-    },
-    
-    toggleJobInputMode() {
-        const wrapper = document.getElementById('subJobSelectWrapper');
-        const input = document.getElementById('subJobInput');
-        const btn = document.getElementById('toggleJobBtn');
-        
-        if (input.classList.contains('hidden')) {
-            wrapper.classList.add('hidden');
-            input.classList.remove('hidden');
-            input.focus();
-            btn.classList.add('text-blue-500', 'bg-blue-100');
-        } else {
-            wrapper.classList.remove('hidden');
-            input.classList.add('hidden');
-            btn.classList.remove('text-blue-500', 'bg-blue-100');
-        }
-    },
-
-    // [核心修復] 渲染成員列表，確保職業顏色顯示
+    // --- 成員管理 (修復顏色樣式) ---
     renderMembers() {
         const grid = document.getElementById('memberGrid');
         const term = document.getElementById('searchInput').value.toLowerCase();
@@ -358,10 +213,11 @@ const app = {
             return matchText && matchJob;
         });
 
+        // 排序
         const rankOrder = { '會長': 0, '指揮官': 1, '資料管理員': 2, '成員': 3 };
         filtered.sort((a, b) => (rankOrder[a.rank] || 3) - (rankOrder[b.rank] || 3));
 
-        // 更新統計
+        // 統計更新
         const countEl = document.getElementById('memberCount');
         if(countEl) countEl.innerText = `Total: ${filtered.length}`;
         const dpsEl = document.getElementById('stat-dps');
@@ -381,10 +237,10 @@ const app = {
                 const isVIP = m.rank !== '成員';
                 const vipBadge = isVIP ? `<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${m.rank==='會長'?'bg-yellow-100 text-yellow-700':m.rank==='指揮官'?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}">${m.rank}</span>` : '';
                 
-                // [關鍵修復] 這裡產生職業 CSS，例如 border-job-神官
+                // [關鍵修復] 產生對應 style.css 的 class
                 const jobClass = `border-job-${m.baseJob}`;
                 
-                // [關鍵修復] 加上 border-l-4 和 jobClass，找回你的顏色
+                // [關鍵修復] 這裡加上了 border-l-4 以及 jobClass，確保左側顏色條出現
                 grid.innerHTML += `
                 <div onclick="app.openEditModal('${m.id}')" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 border-l-4 ${jobClass} relative hover:shadow-md transition cursor-pointer group">
                     ${vipBadge}
@@ -410,6 +266,7 @@ const app = {
     setJobFilter(val) { this.filterJob = val; this.renderMembers(); },
     setFilter(role) { this.filterJob = role; this.renderMembers(); },
 
+    // --- 編輯與刪除成員 ---
     openEditModal(id = null) {
         if (!this.isAdmin()) return; 
 
@@ -424,14 +281,15 @@ const app = {
         const rankSelect = document.getElementById('rank');
         const rankLock = document.getElementById('rankLockIcon');
         
+        // 職位權限控制
         if (this.isMaster()) {
             rankSelect.disabled = false;
             rankSelect.classList.remove('bg-gray-50', 'text-gray-400');
-            rankLock.classList.add('hidden');
+            if(rankLock) rankLock.classList.add('hidden');
         } else {
             rankSelect.disabled = true;
             rankSelect.classList.add('bg-gray-50', 'text-gray-400');
-            rankLock.classList.remove('hidden');
+            if(rankLock) rankLock.classList.remove('hidden');
         }
 
         if (id) {
@@ -495,40 +353,36 @@ const app = {
     },
 
     deleteMember(id) {
-        if(confirm('確定刪除此成員？這會連同刪除其請假、隊伍和活動紀錄。')) {
+        if(confirm('確定刪除此成員？(相關的請假、隊伍、活動紀錄也將一併移除)')) {
             const m = this.data.members.find(x => x.id === id);
             
-            // 1. 刪除成員
+            // 刪除本體
             this.data.members = this.data.members.filter(m => m.id !== id);
 
-            // 2. 清理關聯資料
-            if (this.data.leaveRecords) {
-                this.data.leaveRecords = this.data.leaveRecords.filter(r => r.memberId !== id);
-            }
-            if (this.data.squads) {
-                this.data.squads.forEach(s => {
-                    if (s.members.includes(id)) {
-                        s.members = s.members.filter(mid => mid !== id);
-                    }
-                    if (s.leader === id) s.leader = "";
-                });
-            }
-            if (this.data.activities) {
-                this.data.activities.forEach(act => {
-                    if (act.winners) {
-                        act.winners = act.winners.filter(w => w.id !== id);
-                    }
-                });
-            }
+            // 清理關聯資料
+            this.data.leaveRecords = (this.data.leaveRecords || []).filter(r => r.memberId !== id);
+            
+            (this.data.squads || []).forEach(s => {
+                if (s.members.includes(id)) {
+                    s.members = s.members.filter(mid => mid !== id);
+                }
+                if (s.leader === id) s.leader = "";
+            });
+            
+            (this.data.activities || []).forEach(act => {
+                if (act.winners) {
+                    act.winners = act.winners.filter(w => w.id !== id);
+                }
+            });
 
             this.logHistory(`刪除成員及關聯: ${m ? m.gameName : id}`);
             this.saveData();
             this.closeModal('editModal');
-            this.showToast('成員及紀錄已刪除');
+            this.showToast('已刪除');
         }
-    },// js/app.js - Part 3 (Leaves, Activities & Export)
+    },
 
-    // --- Leave System ---
+    // --- 請假系統 ---
     toggleLeaveForm() {
         const form = document.getElementById('leaveFormContainer');
         form.classList.toggle('hidden');
@@ -704,6 +558,7 @@ const app = {
         }
     },
 
+    // --- 隊伍系統 (Squads) ---
     renderSquads() {
         const grid = document.getElementById('squadGrid');
         const term = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -721,8 +576,10 @@ const app = {
                 const membersHtml = s.members.map(mid => {
                     const m = this.getMember(mid);
                     if (!m) return '';
+                    
                     const isLeave = (this.data.leaveRecords || []).some(r => r.date === s.date && r.memberId === mid && (r.subject === s.subject || r.subject === '預先請假'));
                     const statusClass = isLeave ? 'bg-red-50 text-red-400 decoration-red-400 line-through' : 'bg-slate-50 text-slate-600';
+                    
                     return `<span class="inline-block px-2 py-1 rounded text-xs font-bold mr-1 mb-1 border border-slate-100 ${statusClass}">${m.gameName}</span>`;
                 }).join('');
 
@@ -754,9 +611,11 @@ const app = {
 
     openSquadModal(type, id = null) {
         if (!this.isAdminOrMaster()) return;
+
         this.currentSquadId = id;
         document.getElementById('squadType').value = type;
         document.getElementById('squadMemberSelect').innerHTML = '';
+
         this.renderSubjectOptions();
 
         if (id) {
@@ -766,8 +625,10 @@ const app = {
             document.getElementById('squadDate').value = s.date;
             document.getElementById('squadSubject').value = s.subject;
             document.getElementById('squadNote').value = s.note;
+            
             this.renderSquadLeaderSelect(s.members, s.leader);
             this.renderSquadMemberSelect(s.members);
+
             document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-400 text-xs font-bold hover:bg-red-50 px-3 py-2 rounded-lg">刪除隊伍</button>`;
         } else {
             document.getElementById('squadModalTitle').innerText = '新增隊伍';
@@ -778,6 +639,7 @@ const app = {
             this.renderSquadMemberSelect([]);
             document.getElementById('deleteSquadBtnContainer').innerHTML = '';
         }
+
         this.showModal('squadModal');
     },
 
@@ -808,8 +670,10 @@ const app = {
     renderSquadMemberSelect(checkedIds = []) {
         const container = document.getElementById('squadMemberSelect');
         const term = document.getElementById('memberSearch').value.toLowerCase();
+        
         let html = '';
         let count = 0;
+
         const roles = ['坦克', '輔助', '輸出', '待定'];
         const membersByRole = {};
         
@@ -840,6 +704,7 @@ const app = {
                 });
             }
         });
+
         container.innerHTML = html;
         document.getElementById('selectedCount').innerText = count;
     },
@@ -848,6 +713,7 @@ const app = {
         const checkboxes = document.querySelectorAll('input[name="squadMember"]:checked');
         const ids = Array.from(checkboxes).map(c => c.value);
         const currentLeader = document.getElementById('squadLeader').value;
+        
         this.renderSquadLeaderSelect(ids, currentLeader);
         document.getElementById('selectedCount').innerText = ids.length;
     },
@@ -858,6 +724,7 @@ const app = {
             sel.innerHTML = '<option value="">未指定</option>';
             return;
         }
+        
         let html = '<option value="">未指定</option>';
         memberIds.forEach(id => {
             const m = this.getMember(id);
@@ -911,9 +778,11 @@ const app = {
         }
     },
 
+    // --- 活動系統 ---
     renderActivities() {
         const container = document.getElementById('activityList');
         const searchTerm = (document.getElementById('activitySearchInput')?.value || '').toLowerCase().trim();
+        
         let list = this.data.activities || [];
         list.sort((a, b) => new Date(b.date || '2000-01-01') - new Date(a.date || '2000-01-01'));
 
@@ -946,6 +815,7 @@ const app = {
 
             const deleteBtn = this.isMaster() ? 
                 `<button onclick="app.confirmDeleteActivity('${act.id}')" class="text-slate-300 hover:text-red-400 p-2"><i class="fas fa-trash-alt"></i></button>` : '';
+
             const editAction = this.isMaster() ? `onclick="app.openActivityModal('${act.id}')"` : '';
             const cursorClass = this.isMaster() ? 'cursor-pointer hover:shadow-md' : 'cursor-default';
 
@@ -969,8 +839,10 @@ const app = {
 
     openActivityModal(id = null) {
         if(!this.isMaster()) return; 
+
         this.currentActivityId = id;
         this.tempWinners = []; 
+
         if (id) {
             const act = this.data.activities.find(a => a.id === id);
             if (act) {
@@ -985,9 +857,11 @@ const app = {
             document.getElementById('activityDate').value = new Date().toISOString().split('T')[0];
             this.tempWinners = [];
         }
+
         this.renderWinnerList();
         document.getElementById('deleteActivityBtnContainer').innerHTML = id ? 
             `<button type="button" onclick="app.confirmDeleteActivity('${id}')" class="text-red-400 text-xs font-bold hover:bg-red-50 px-3 py-2 rounded-lg">刪除此活動</button>` : '';
+        
         this.showModal('activityModal');
     },
 
@@ -995,20 +869,34 @@ const app = {
         const name = document.getElementById('activityName').value.trim();
         const note = document.getElementById('activityNote').value.trim();
         const date = document.getElementById('activityDate').value;
+
         if (!name) return this.showToast('請輸入活動名稱', 'error');
         if (!date) return this.showToast('請選擇日期', 'error');
 
         if (this.currentActivityId) {
             const index = this.data.activities.findIndex(a => a.id === this.currentActivityId);
             if (index !== -1) {
-                this.data.activities[index] = { ...this.data.activities[index], name, note, date, winners: this.tempWinners };
+                this.data.activities[index] = {
+                    ...this.data.activities[index],
+                    name,
+                    note,
+                    date,
+                    winners: this.tempWinners
+                };
                 this.logHistory(`更新活動: ${name}`);
             }
         } else {
-            const newActivity = { id: Date.now().toString(), name, note, date, winners: this.tempWinners };
+            const newActivity = {
+                id: Date.now().toString(),
+                name,
+                note,
+                date,
+                winners: this.tempWinners
+            };
             this.data.activities.push(newActivity);
             this.logHistory(`新增活動: ${name}`);
         }
+
         this.saveData();
         this.closeModal('activityModal');
         this.renderActivities();
@@ -1033,11 +921,14 @@ const app = {
     renderWinnerMemberSelect() {
         const grid = document.getElementById('winnerSelectGrid');
         const term = document.getElementById('winnerSearchInput').value.toLowerCase();
+        
         const selectedIds = this.tempWinners.map(w => w.id);
+        
         const candidates = (this.data.members || []).filter(m => 
             !selectedIds.includes(m.id) && 
             (m.gameName.toLowerCase().includes(term) || m.lineName.toLowerCase().includes(term))
         );
+
         grid.innerHTML = candidates.map(m => `
             <label class="flex items-center p-3 rounded-xl border border-slate-100 hover:bg-yellow-50 cursor-pointer transition">
                 <input type="checkbox" name="winnerCandidate" value="${m.id}" class="w-5 h-5 text-yellow-500 rounded mr-3">
@@ -1050,7 +941,9 @@ const app = {
         const grid = document.getElementById('winnerSelectGrid');
         const checkboxes = grid.querySelectorAll('input[type="checkbox"]');
         const available = Array.from(checkboxes).filter(cb => !cb.checked);
+        
         if (available.length === 0) return this.showToast('無可選成員', 'error');
+        
         const winner = available[Math.floor(Math.random() * available.length)];
         winner.checked = true;
         winner.closest('label').classList.add('bg-yellow-100', 'border-yellow-300', 'scale-105');
@@ -1059,14 +952,20 @@ const app = {
 
     confirmWinnerSelection() {
         const checkboxes = document.querySelectorAll('input[name="winnerCandidate"]:checked');
-        checkboxes.forEach(cb => { this.tempWinners.push({ id: cb.value }); });
+        checkboxes.forEach(cb => {
+            this.tempWinners.push({ id: cb.value });
+        });
+        
         this.closeModal('winnerSelectionModal');
         this.renderWinnerList();
     },
 
     renderWinnerList() {
         const container = document.getElementById('winnerListContainer');
-        document.getElementById('winnerCount').innerText = this.tempWinners.length;
+        const countSpan = document.getElementById('winnerCount');
+        
+        countSpan.innerText = this.tempWinners.length;
+        
         container.innerHTML = this.tempWinners.map((w, index) => {
             const m = this.getMember(w.id);
             if(!m) return '';
@@ -1084,19 +983,125 @@ const app = {
         this.renderWinnerList();
     },
 
+    // --- 工具函式 ---
     getMember(id) { return (this.data.members || []).find(m => m.id === id); },
+    
     showModal(id) { document.getElementById(id).classList.remove('hidden'); },
     closeModal(id) { document.getElementById(id).classList.add('hidden'); },
+    
     showToast(msg, type = 'success') {
         const toast = document.getElementById('globalToast');
         const icon = document.getElementById('toastIcon');
         document.getElementById('toastMsg').innerText = msg;
-        if (type === 'error') { icon.className = 'fas fa-exclamation-circle text-red-400'; } 
-        else { icon.className = 'fas fa-check-circle text-green-400'; }
+        
+        if (type === 'error') {
+            icon.className = 'fas fa-exclamation-circle text-red-400';
+        } else {
+            icon.className = 'fas fa-check-circle text-green-400';
+        }
+        
         toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
-        setTimeout(() => { toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none'); }, 3000);
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        }, 3000);
     },
 
+    // --- 權限與管理 ---
+    openLoginModal() {
+        if (this.user) {
+            if(confirm('確定登出？')) {
+                this.user = null;
+                this.showToast('已登出');
+                this.checkAdminUI();
+            }
+        } else {
+            this.showModal('loginModal');
+        }
+    },
+    
+    handleLogin() {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        if (u === 'admin' && p === '8888') {
+            this.user = { role: 'admin' };
+            this.showToast('管理員登入成功');
+            this.closeModal('loginModal');
+            document.getElementById('loginUser').value = '';
+            document.getElementById('loginPass').value = '';
+        } else if (u === 'master' && p === '0000') {
+            this.user = { role: 'master' };
+            this.showToast('會長登入成功');
+            this.closeModal('loginModal');
+        } else {
+            this.showToast('帳號或密碼錯誤', 'error');
+        }
+        this.checkAdminUI();
+    },
+
+    isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'master'); },
+    isMaster() { return this.user && this.user.role === 'master'; },
+    isAdminOrMaster() { return this.isAdmin(); },
+
+    checkAdminUI() {
+        const btn = document.getElementById('adminToggleBtn');
+        const controls = document.getElementById('adminControls');
+        const groupWarning = document.getElementById('adminWarning');
+        
+        if (this.user) {
+            btn.classList.add('text-blue-600', 'bg-blue-50');
+            btn.innerHTML = '<i class="fas fa-user-check"></i>';
+            controls.classList.remove('hidden');
+            if(groupWarning) groupWarning.classList.add('hidden');
+        } else {
+            btn.classList.remove('text-blue-600', 'bg-blue-50');
+            btn.innerHTML = '<i class="fas fa-user-shield"></i>';
+            controls.classList.add('hidden');
+            if(groupWarning) groupWarning.classList.remove('hidden');
+        }
+        
+        const actWarning = document.getElementById('activityAdminWarning');
+        const addActBtn = document.getElementById('addActivityBtn');
+        if (this.isMaster()) {
+            if(actWarning) actWarning.classList.add('hidden');
+            if(addActBtn) addActBtn.classList.remove('hidden');
+        } else {
+            if(actWarning) actWarning.classList.remove('hidden');
+            if(addActBtn) addActBtn.classList.add('hidden');
+        }
+        this.renderMembers(); 
+    },
+
+    renderJobOptions() {
+        const baseSel = document.getElementById('baseJobSelect');
+        baseSel.innerHTML = Object.keys(jobData).map(j => `<option value="${j}">${j}</option>`).join('');
+        this.updateSubJobSelect();
+    },
+
+    updateSubJobSelect() {
+        const base = document.getElementById('baseJobSelect').value;
+        const subSel = document.getElementById('subJobSelect');
+        const subs = jobData[base] || [];
+        subSel.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+    },
+    
+    toggleJobInputMode() {
+        const wrapper = document.getElementById('subJobSelectWrapper');
+        const input = document.getElementById('subJobInput');
+        const btn = document.getElementById('toggleJobBtn');
+        
+        if (input.classList.contains('hidden')) {
+            wrapper.classList.add('hidden');
+            input.classList.remove('hidden');
+            input.focus();
+            btn.classList.add('text-blue-500', 'bg-blue-100');
+        } else {
+            wrapper.classList.remove('hidden');
+            input.classList.add('hidden');
+            btn.classList.remove('text-blue-500', 'bg-blue-100');
+        }
+    },
+
+    // --- 匯出匯入 ---
     exportDataJSON() {
         const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
@@ -1118,7 +1123,9 @@ const app = {
                     this.data = JSON.parse(event.target.result);
                     this.saveData();
                     alert('匯入成功');
-                } catch (err) { alert('格式錯誤'); }
+                } catch (err) {
+                    alert('格式錯誤');
+                }
             };
             reader.readAsText(file);
         };
