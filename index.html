@@ -22,7 +22,9 @@
         .fab-btn { position: fixed; bottom: 24px; right: 24px; z-index: 50; box-shadow: 0 10px 20px -5px rgba(0,0,0,0.2); }
         @supports (padding-bottom: env(safe-area-inset-bottom)) { .fab-btn { bottom: calc(24px + env(safe-area-inset-bottom)); } }
     </style>
-</head> <body class="bg-ro-bg min-h-screen pt-safe pb-24 relative font-sans text-slate-600 selection:bg-blue-100">
+</head> 
+
+<body class="bg-ro-bg min-h-screen pt-safe pb-24 relative font-sans text-slate-600 selection:bg-blue-100">
 
     <div id="globalToast" class="fixed bottom-24 left-1/2 transform -translate-x-1/2 bg-slate-800 text-white px-5 py-2.5 rounded-full shadow-xl flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-4 pointer-events-none z-[100]"><i id="toastIcon" class="fas fa-check-circle text-green-400"></i><span id="toastMsg" class="font-bold text-sm">成功</span></div>
 
@@ -125,7 +127,7 @@
         <div id="view-groups" class="hidden">
             <div class="mb-4">
                 <div class="flex justify-between items-center"><h2 class="text-xl font-bold text-slate-700" id="groupViewTitle">分組列表</h2></div>
-                <p class="text-xs text-slate-400 mt-1 font-bold">習慣固定人員團進團出。請填表，會長會依狀況排團體戰隊伍。</p>
+                <p class="text-xs text-slate-400 mt-1 font-bold">習慣團進團出。請填固定團，會長會依狀況排團體戰隊伍。</p>
             </div>
             <div id="groupControlPanel" class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-red-500 border-slate-100 mb-4 flex justify-between items-center">
                 <input type="text" id="groupSearchInput" oninput="app.renderSquads()" placeholder="搜尋隊伍..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl px-4 py-2.5 outline-none font-bold">
@@ -137,9 +139,12 @@
 
         <div id="view-activity" class="hidden">
             <div class="flex justify-between items-center mb-4"><h2 class="text-xl font-bold text-slate-700 flex items-center"><i class="fas fa-trophy mr-2 text-yellow-500"></i>活動獎勵</h2></div>
-            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-yellow-500 border-slate-100 mb-4 flex justify-end items-center">
-                 <div id="activityAdminWarning" class="bg-red-50 text-red-800 px-3 py-1 rounded text-xs hidden mr-auto font-bold"><i class="fas fa-lock mr-2"></i> 僅限會長</div>
-                 <button onclick="app.handleMainAction()" id="addActivityBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white shadow-md px-4 py-2 rounded-xl font-bold text-sm hidden border-b-2 border-yellow-600"><i class="fas fa-plus mr-1"></i> 新增活動</button>
+            <div class="bg-white p-4 rounded-2xl shadow-sm border-l-4 border-l-yellow-500 border-slate-100 mb-4 flex flex-col md:flex-row gap-3 justify-between items-center">
+                <input type="text" id="activitySearchInput" oninput="app.renderActivities()" placeholder="搜尋活動名稱、得獎者..." class="w-full bg-slate-50 border-0 text-slate-800 rounded-xl px-4 py-2.5 outline-none font-bold focus:ring-2 focus:ring-yellow-200">
+                <div class="flex items-center gap-2 shrink-0 w-full md:w-auto justify-end">
+                    <div id="activityAdminWarning" class="bg-red-50 text-red-800 px-3 py-2 rounded-xl text-xs hidden font-bold whitespace-nowrap"><i class="fas fa-lock mr-2"></i> 僅限會長</div>
+                    <button onclick="app.openActivityModal()" id="addActivityBtn" class="bg-yellow-500 hover:bg-yellow-600 text-white shadow-md px-4 py-2 rounded-xl font-bold text-sm hidden border-b-2 border-yellow-600 whitespace-nowrap"><i class="fas fa-plus mr-1"></i> 新增活動</button>
+                </div>
             </div>
             <div id="activityList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
              <div id="noActivitiesMsg" class="hidden text-center py-20 text-slate-400"><p class="font-bold">目前沒有活動</p></div>
@@ -208,6 +213,7 @@
             <input type="hidden" id="activityId">
             <div class="space-y-3 mb-4">
                 <div><label class="block text-xs font-bold text-slate-500 mb-1">名稱</label><input type="text" id="activityName" class="w-full bg-slate-50 border-0 rounded-xl p-3 font-bold outline-none"></div>
+                <div><label class="block text-xs font-bold text-slate-500 mb-1">日期</label><input type="date" id="activityDate" class="w-full bg-slate-50 border-0 rounded-xl p-3 font-bold outline-none text-slate-700"></div>
                 <div><label class="block text-xs font-bold text-slate-500 mb-1">說明</label><textarea id="activityNote" rows="2" class="w-full bg-slate-50 border-0 rounded-xl p-3 outline-none"></textarea></div>
             </div>
             <div class="flex justify-between items-center mb-2 pt-2 border-t border-slate-100">

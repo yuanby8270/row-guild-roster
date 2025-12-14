@@ -1,914 +1,1118 @@
-/* =====================================================
-   app.js — Production v5.0 (Master Merged: GVG + Activity)
-   ===================================================== */
+import { jobData } from './config.js';
 
-if (typeof window.AppConfig === 'undefined') { alert("系統錯誤：設定檔未載入。"); }
+const app = {
+    data: {
+        members: [],
+        leaveRecords: [],
+        squads: [],
+        activities: [],
+        customSquadSubjects: ['GVG', 'PVE', '副本', 'MVP', '爬塔'],
+        history: []
+    },
+    user: null, 
+    db: null,
+    unsubscribe: null,
+    currentTab: 'home',
+    filterJob: 'all',
+    filterRole: 'all',
+    currentSquadId: null,
+    currentActivityId: null,
+    tempWinners: [],
 
-const Cfg = window.AppConfig || {};
-const { COLLECTION_NAMES, JOB_STYLES, AUTH_CONFIG } = Cfg;
-
-const App = {
-    // --- State ---
-    db: null, auth: null,
-    members: [], groups: [], activities: [], history: [], leaves: [],
-    raidThemes: ['GVG 攻城戰', '公會副本', '野外王'],
-    
-    // UI State
-    currentTab: 'home', currentFilter: 'all', currentJobFilter: 'all',
-    currentSquadRoleFilter: 'all', currentModalRoleFilter: 'all',
-    currentSquadDateFilter: 'all', currentSquadSubjectFilter: 'all',
-    currentSquadMembers: [], currentActivityWinners: [], tempWinnerSelection: [],
-    
-    mode: 'demo', userRole: 'guest', isRendering: false,
-    CLEANUP_DAYS: 14,
-    BASE_TIME: new Date('2023-01-01').getTime(),
-
-    isAdminOrMaster: function() { return ['master', 'admin'].includes(this.userRole); },
-
-    // --- Init ---
-    init: async function() {
-        try {
-            this.loadLocalState();
-            this.initFirebase();
-            this.populateJobSelects();
-            this.updateAdminUI();
-            this.switchTab('home');
-            this.showToast("系統已就緒", "info");
-        } catch (e) { console.error(e); }
+    init() {
+        this.loadFirebaseConfig();
     },
 
-    scheduleRender: function() {
-        if (this.isRendering) return;
-        this.isRendering = true;
-        document.body.classList.add('is-rendering');
-        requestAnimationFrame(() => {
-            this.render();
-            this.isRendering = false;
-            document.body.classList.remove('is-rendering');
-        });
-    },
-
-    normalizeMemberData: function(m) {
-        if (!m) return null;
-        let created = m.createdAt;
-        if (!created) {
-            const seedIndex = Cfg.SEED_DATA.findIndex(seed => seed.id === m.id);
-            if (seedIndex !== -1) created = this.BASE_TIME + (seedIndex * 1000); 
-            else created = Date.now();
-        }
-        return { ...m, role: m.role || '待定', mainClass: m.mainClass || '初心者', createdAt: created };
-    },
-
-    loadLocalState: function() {
-        const safeParse = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) || d; } catch(e){ return d; }};
-        this.userRole = localStorage.getItem('row_user_role') || 'guest';
-        this.members = safeParse('row_local_members', Cfg.SEED_DATA).map(m => this.normalizeMemberData(m));
-        this.groups = safeParse('row_local_groups', Cfg.SEED_GROUPS);
-        this.activities = safeParse('row_local_activities', Cfg.SEED_ACTIVITIES || []);
-        this.leaves = safeParse('row_local_leaves', []);
-        this.history = safeParse('row_mod_history', []);
-        this.raidThemes = safeParse('row_local_themes', ['GVG 攻城戰', '公會副本', '野外王']);
-        this.cleanOldHistory();
-        this.members = this.sortMembers(this.members);
-    },
-
-    saveLocal: function(key = 'all') {
-        const save = (k, v) => localStorage.setItem(k, JSON.stringify(v));
-        if (key === 'all') {
-            save('row_local_members', this.members); save('row_local_groups', this.groups);
-            save('row_local_activities', this.activities); save('row_local_leaves', this.leaves);
-            save('row_local_themes', this.raidThemes); save('row_mod_history', this.history);
-        } else {
-            if(key==='members') save('row_local_members', this.members);
-            if(key==='groups') save('row_local_groups', this.groups);
-            if(key==='activities') save('row_local_activities', this.activities);
-            if(key==='leaves') save('row_local_leaves', this.leaves);
-        }
-        if(this.mode === 'demo') this.scheduleRender();
-    },
-
-    initFirebase: function() {
-        let config = null;
-        try { config = JSON.parse(localStorage.getItem('row_firebase_config')); } catch(e){}
-        if (!config && Cfg.FIREBASE_CONFIG && Cfg.FIREBASE_CONFIG.apiKey) config = Cfg.FIREBASE_CONFIG;
-        
-        if (config && config.apiKey) {
+    loadFirebaseConfig() {
+        const savedConfig = localStorage.getItem('ro_firebase_config');
+        if (savedConfig) {
             try {
-                if (!firebase.apps.length) firebase.initializeApp(config);
-                this.auth = firebase.auth(); this.db = firebase.firestore();
-                this.mode = 'firebase';
-                this.syncWithFirebase();
-            } catch (e) { this.mode = 'demo'; }
+                const config = JSON.parse(savedConfig);
+                firebase.initializeApp(config);
+                this.db = firebase.firestore();
+                this.setupRealtimeListener();
+                document.getElementById('firebaseConfigInput').value = JSON.stringify(config, null, 2);
+            } catch (e) {
+                console.error("Firebase init failed:", e);
+                this.loadLocalData();
+            }
+        } else {
+            this.loadLocalData();
         }
+        this.renderJobOptions();
     },
 
-    syncWithFirebase: function() {
-        if (!this.db || this.mode !== 'firebase') return;
-        const sync = (n, p, norm) => {
-            this.db.collection(n).onSnapshot(s => {
-                const d = []; s.forEach(x => d.push({id:x.id, ...x.data()}));
-                this[p] = norm ? this.sortMembers(d.map(m=>this.normalizeMemberData(m))) : d;
-                this.scheduleRender();
-            });
-        };
-        sync(COLLECTION_NAMES.MEMBERS, 'members', true);
-        sync(COLLECTION_NAMES.GROUPS, 'groups');
-        sync(COLLECTION_NAMES.ACTIVITIES, 'activities');
-        sync('leaves', 'leaves');
-        this.db.collection('history').orderBy('timestamp', 'desc').limit(50).onSnapshot(s => {
-            const arr=[]; s.forEach(d=>arr.push(d.data())); this.history=arr;
-            if(!document.getElementById('historyModal').classList.contains('hidden')) this.showHistoryModal();
-        });
-    },
-    
-    sortMembers: function(arr) { return arr.sort((a,b) => (a.createdAt||0) - (b.createdAt||0)); },
-    cleanOldHistory: function() { this.history = this.history.filter(h => h.timestamp >= Date.now() - (this.CLEANUP_DAYS*86400000)); },
-    logChange: function(action, details, targetId) {
-        const log = { timestamp:Date.now(), user:this.userRole, action, details:details||'', targetId:targetId||'N/A' };
-        if(this.mode==='firebase') this.db.collection('history').add(log);
-        else { this.cleanOldHistory(); this.history.unshift(log); this.saveLocal('history'); }
-        this.showToast(`${action} 成功`);
-    },
-    
-    showToast: function(msg, type='success') {
-        const el = document.getElementById('globalToast'), txt = document.getElementById('toastMsg'), icon = document.getElementById('toastIcon');
-        if(!el) return;
-        txt.innerText = msg;
-        icon.className = type==='error' ? 'fas fa-exclamation-circle text-red-400' : 'fas fa-check-circle text-green-400';
-        el.classList.remove('opacity-0', 'translate-y-4');
-        setTimeout(()=>el.classList.add('opacity-0', 'translate-y-4'), 3000);
-    },
-
-    // --- Auth & Nav ---
-    openLoginModal: function() {
-        if(this.userRole!=='guest') {
-            if(confirm("登出？")) { this.userRole='guest'; localStorage.removeItem('row_user_role'); this.updateAdminUI(); this.switchTab('home'); }
-        } else { document.getElementById('loginForm').reset(); this.showModal('loginModal'); }
-    },
-    handleLogin: function() {
-        const u = document.getElementById('loginUser').value, p = document.getElementById('loginPass').value;
-        const auth = Cfg.AUTH_CONFIG || { MASTER:{user:'poppy',pass:'123456'} };
-        let r = 'guest';
-        if(auth.MASTER && u===auth.MASTER.user && p===auth.MASTER.pass) r='master';
-        else if(auth.ADMIN && u===auth.ADMIN.user && p===auth.ADMIN.pass) r='admin';
-        else if(u==='poppy' && p==='123456') r='master';
-        else { this.showToast("帳號密碼錯誤", "error"); return; }
-        this.userRole = r; localStorage.setItem('row_user_role', r);
-        this.closeModal('loginModal'); this.updateAdminUI(); this.showToast(`登入成功: ${r}`);
-    },
-
-    switchTab: function(tab) {
-        this.currentTab = tab;
-        ['home','members','groups','activity','leave'].forEach(v => {
-            const el = document.getElementById('view-'+v); if(el) el.classList.add('hidden');
-        });
-        if(tab==='gvg'||tab==='groups') {
-            const grpView = document.getElementById('view-groups'); if(grpView) grpView.classList.remove('hidden');
-            const title = document.getElementById('groupViewTitle'), panel = document.getElementById('groupControlPanel');
-            if(tab==='gvg') {
-                title.innerText = '團體戰分組'; panel.classList.remove('border-l-green-500'); panel.classList.add('border-l-red-500');
+    setupRealtimeListener() {
+        if (!this.db) return;
+        document.body.classList.add('is-rendering');
+        this.unsubscribe = this.db.collection('guildData').doc('main').onSnapshot(doc => {
+            if (doc.exists) {
+                this.data = doc.data();
+                if (!this.data.history) this.data.history = []; 
             } else {
-                title.innerText = '固定團列表'; panel.classList.remove('border-l-red-500'); panel.classList.add('border-l-green-500');
+                this.saveData(); 
             }
+            this.renderAll();
+            document.body.classList.remove('is-rendering');
+        }, err => {
+            console.error(err);
+            this.showToast('連線中斷，切換為本地模式', 'error');
+            document.body.classList.remove('is-rendering');
+            this.loadLocalData();
+        });
+    },
+
+    loadLocalData() {
+        const local = localStorage.getItem('ro_guild_data');
+        if (local) this.data = JSON.parse(local);
+        if (!this.data.history) this.data.history = [];
+        this.renderAll();
+    },
+
+    saveData() {
+        if (this.db) {
+            this.db.collection('guildData').doc('main').set(this.data)
+                .catch(e => this.showToast('儲存失敗', 'error'));
         } else {
-            const t = document.getElementById('view-'+tab); if(t) t.classList.remove('hidden');
+            localStorage.setItem('ro_guild_data', JSON.stringify(this.data));
         }
-        
-        document.getElementById('nav-container').classList.toggle('hidden', tab==='home');
-        document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
-        const btn = document.getElementById('tab-'+tab); if(btn) btn.classList.add('active');
-        
-        const fab = document.getElementById('mainActionBtn');
-        if(fab) fab.classList.toggle('hidden', tab==='home' || this.userRole==='guest');
-        
-        const warning = document.getElementById('adminWarning');
-        if(warning) warning.classList.toggle('hidden', !(tab==='gvg' && !['master','admin','commander'].includes(this.userRole)));
-
-        if(tab==='leave') this.initLeaveForm();
-        this.scheduleRender();
+        this.renderAll();
     },
 
-    handleMainAction: function() {
-        if(this.currentTab==='members') this.openAddModal();
-        else if(this.currentTab==='gvg'||this.currentTab==='groups') {
-            if(['master','admin','commander'].includes(this.userRole)) this.openSquadModal();
-            else this.showToast("權限不足", "error");
-        } else if(this.currentTab==='activity') {
-            if(this.isAdminOrMaster()) this.openActivityModal();
-            else this.showToast("權限不足", "error");
-        } else if (this.currentTab === 'leave') {
-            this.toggleLeaveForm();
+    saveConfig() {
+        const input = document.getElementById('firebaseConfigInput').value;
+        try {
+            JSON.parse(input); 
+            localStorage.setItem('ro_firebase_config', input);
+            location.reload();
+        } catch (e) {
+            this.showToast('JSON 格式錯誤', 'error');
         }
     },
-    
-    updateAdminUI: function() {
-        const btn = document.getElementById('adminToggleBtn'), ctrls = document.getElementById('adminControls');
-        const isAuth = this.userRole!=='guest';
-        if(btn) { btn.classList.toggle('admin-mode-on', isAuth); btn.innerHTML = isAuth ? '<i class="fas fa-sign-out-alt"></i>' : '<i class="fas fa-user-shield"></i>'; }
-        if(ctrls) ctrls.classList.toggle('hidden', !this.isAdminOrMaster());
-        
-        const rankSel = document.getElementById('rank'), lock = document.getElementById('rankLockIcon');
-        if(rankSel) rankSel.disabled = !this.isAdminOrMaster();
-        if(lock) lock.className = this.isAdminOrMaster() ? "fas fa-unlock text-blue-500 text-xs ml-2" : "fas fa-lock text-slate-300 text-xs ml-2";
-        
-        const actBtn = document.getElementById('addActivityBtn'), actWarn = document.getElementById('activityAdminWarning');
-        if(actBtn) actBtn.classList.toggle('hidden', !this.isAdminOrMaster());
-        if(actWarn) actWarn.classList.toggle('hidden', this.isAdminOrMaster());
-        
-        this.scheduleRender();
-    },
 
-    render: function() {
-        if(this.currentTab==='members') this.renderMembers();
-        else if(this.currentTab==='gvg'||this.currentTab==='groups') this.renderSquads();
-        else if(this.currentTab==='activity') this.renderActivities();
-        else if(this.currentTab==='leave') this.renderLeaveList();
-        const cnt = document.querySelector('#memberCount'); if(cnt) cnt.innerText = `Total: ${this.members.length}`;
-    },// --- Members Logic ---
-    renderMembers: function() {
-        const grid = document.getElementById('memberGrid'), noMsg = document.getElementById('noMemberMsg');
-        if(!grid) return;
-        const search = (document.getElementById('searchInput').value||'').toLowerCase();
-        
-        const filtered = this.members.filter(m => {
-            const txt = ((m.lineName||"")+(m.gameName||"")+(m.mainClass||"")+(m.role||"")).toLowerCase();
-            const jobMatch = this.currentJobFilter==='all' || (m.mainClass||"").startsWith(this.currentJobFilter);
-            const roleMatch = this.currentFilter==='all' || (m.role||"").includes(this.currentFilter) || (this.currentFilter==='坦'&&m.mainClass.includes('坦'));
-            return txt.includes(search) && jobMatch && roleMatch;
-        });
-        
-        if(filtered.length===0) { grid.innerHTML=''; if(noMsg) noMsg.classList.remove('hidden'); }
-        else {
-            if(noMsg) noMsg.classList.add('hidden');
-            grid.innerHTML = filtered.map(m => this.createCardHTML(m)).join('');
+    resetToDemo() {
+        if(confirm('確定清除設定並重置？')) {
+            localStorage.removeItem('ro_firebase_config');
+            localStorage.removeItem('ro_guild_data');
+            location.reload();
         }
-        
-        const count = r => this.members.filter(m=>(m.role||'').includes(r)).length;
-        ['dps','sup','tank'].forEach(k => {
-             const el=document.getElementById('stat-'+k); if(el) el.innerText=count(k==='dps'?'輸出':k==='sup'?'輔助':'坦');
-        });
     },
 
-    createCardHTML: function(item) {
-        const mainJob = item.mainClass ? item.mainClass.split('(')[0] : '初心者';
-        const style = Cfg.JOB_STYLES.find(s => s.key.some(k => mainJob.includes(k))) || { class: 'bg-job-default', icon: 'fa-user' };
-        
-        let rankBadge = '';
-        if(item.rank==='會長') rankBadge='<span class="bg-slate-800 text-white text-[10px] px-1.5 rounded mr-1">會長</span>';
-        else if(item.rank==='指揮官') rankBadge='<span class="bg-blue-600 text-white text-[10px] px-1.5 rounded mr-1">指揮</span>';
-        else if(item.rank==='資料管理員') rankBadge='<span class="bg-slate-500 text-white text-[10px] px-1.5 rounded mr-1">管理</span>';
-
-        const getRoleTag = (r) => {
-            if((r||'').includes('輸出')) return `<span class="tag tag-dps">DPS</span>`;
-            if((r||'').includes('坦')) return `<span class="tag tag-tank">TANK</span>`;
-            if((r||'').includes('輔助')) return `<span class="tag tag-sup">SUP</span>`;
-            return `<span class="tag bg-slate-100 text-slate-400">?</span>`;
+    logHistory(action) {
+        const record = {
+            time: new Date().toLocaleString('zh-TW'),
+            user: this.user ? this.user.role : '訪客',
+            action: action
         };
-
-        return `<div class="card member-card border-l-4 ${style.class.replace('bg-', 'border-')}" onclick="app.openEditModal('${item.id}')">
-            <div class="job-icon-box"><i class="fas ${style.icon}"></i></div>
-            <div class="flex-grow p-3 flex flex-col justify-between min-w-0">
-                <div class="flex justify-between items-start">
-                    <div class="min-w-0"><div class="flex items-center mb-0.5">${rankBadge}<h3 class="font-bold text-slate-800 truncate text-sm">${item.gameName}</h3></div><p class="text-xs text-slate-400 font-bold">${item.mainClass}</p></div>
-                    ${getRoleTag(item.role)}
-                </div>
-                <div class="flex items-center text-[10px] text-slate-400 mt-2 bg-slate-50 px-2 py-1 rounded w-fit" onclick="event.stopPropagation(); app.copyText(this, '${item.lineName}')">
-                    <i class="fab fa-line text-green-500 mr-1"></i> ${item.lineName}
-                </div>
-            </div>
-        </div>`;
+        if (!this.data.history) this.data.history = [];
+        this.data.history.unshift(record);
+        if (this.data.history.length > 50) this.data.history.pop();
     },
 
-    // --- Editor ---
-    setFilter: function(f) {
-        this.currentFilter=f;
-        document.querySelectorAll('.filter-btn').forEach(b => {
-            const active = (f==='all' && b.innerText==='全部') || b.innerText.includes(f);
-            b.className = active ? "filter-btn px-4 py-1.5 rounded-full text-sm font-bold bg-slate-800 text-white shadow-md transition" : "filter-btn px-4 py-1.5 rounded-full text-sm font-bold bg-white text-slate-600 border transition hover:bg-slate-50";
-        });
-        this.renderMembers();
-    },
-    setJobFilter: function(j) { this.currentJobFilter=j; this.renderMembers(); },
-
-    populateJobSelects: function() {
-        const bs = document.getElementById('baseJobSelect');
-        if(bs && Cfg.JOB_STRUCTURE) bs.innerHTML = '<option value="" disabled selected>選擇職業</option>' + Object.keys(Cfg.JOB_STRUCTURE).map(j=>`<option value="${j}">${j}</option>`).join('');
-    },
-    updateSubJobSelect: function() {
-        const b=document.getElementById('baseJobSelect').value, s=document.getElementById('subJobSelect');
-        s.innerHTML = '<option value="" disabled selected>流派</option>';
-        if(Cfg.JOB_STRUCTURE[b]) { s.disabled=false; Cfg.JOB_STRUCTURE[b].forEach(sub=>s.innerHTML+=`<option value="${b}(${sub})">${sub}</option>`); }
-        else s.disabled=true;
-    },
-    toggleJobInputMode: function() {
-        document.getElementById('subJobInput').classList.toggle('hidden');
-        document.getElementById('subJobSelectWrapper').classList.toggle('hidden');
-    },
-
-    openAddModal: function() {
-        document.getElementById('memberForm').reset(); document.getElementById('editId').value='';
-        document.getElementById('deleteBtnContainer').innerHTML='';
-        this.showModal('editModal');
-    },
-    openEditModal: function(id) {
-        const m = this.members.find(x=>x.id===id); if(!m) return;
-        document.getElementById('editId').value=m.id;
-        document.getElementById('gameName').value=m.gameName; document.getElementById('lineName').value=m.lineName;
-        document.getElementById('role').value=(m.role||'待定').split(' ')[0]; document.getElementById('rank').value=m.rank||'成員';
-        document.getElementById('intro').value=m.intro||'';
-        
-        const full=m.mainClass||'', match=full.match(/^([^(]+)\(([^)]+)\)$/);
-        const bs=document.getElementById('baseJobSelect'), ss=document.getElementById('subJobSelect');
-        const inp=document.getElementById('subJobInput'), wrap=document.getElementById('subJobSelectWrapper');
-        
-        inp.classList.add('hidden'); wrap.classList.remove('hidden');
-        if(match && Cfg.JOB_STRUCTURE[match[1]]) {
-            bs.value=match[1]; this.updateSubJobSelect(); ss.value=full;
-        } else if(Cfg.JOB_STRUCTURE[full.split('(')[0]]) {
-            bs.value=full.split('(')[0]; this.updateSubJobSelect(); ss.value=full;
-        } else {
-            bs.value=""; inp.value=full; inp.classList.remove('hidden'); wrap.classList.add('hidden');
-        }
-        
-        document.getElementById('deleteBtnContainer').innerHTML = this.isAdminOrMaster() ? `<button type="button" onclick="app.deleteMember('${id}')" class="text-red-400 text-sm font-bold">刪除</button>` : '';
-        this.showModal('editModal');
-    },
-    
-    saveMemberData: async function() {
-        const id=document.getElementById('editId').value;
-        let job = !document.getElementById('subJobInput').classList.contains('hidden') ? document.getElementById('subJobInput').value : document.getElementById('subJobSelect').value;
-        if(!job) job = document.getElementById('baseJobSelect').value || "待定";
-        
-        const data = {
-            gameName: document.getElementById('gameName').value,
-            lineName: document.getElementById('lineName').value,
-            mainClass: job, role: document.getElementById('role').value,
-            rank: document.getElementById('rank').value, intro: document.getElementById('intro').value
-        };
-        
-        if(!id) { data.createdAt=Date.now(); if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).add(data); else { data.id='m'+Date.now(); this.members.push(data); this.saveLocal('members'); } }
-        else { if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).update(data); else { const idx=this.members.findIndex(m=>m.id===id); this.members[idx]={...this.members[idx], ...data}; this.saveLocal('members'); } }
-        this.closeModal('editModal'); this.showToast("成員已儲存");
-    },
-
-    deleteMember: async function(id) {
-        if(!confirm("確定要刪除這位成員嗎？\n(注意：將從所有隊伍中移除，但保留活動得獎紀錄)")) return;
-        if (this.mode === 'firebase') await this.db.collection(COLLECTION_NAMES.MEMBERS).doc(id).delete();
-        
-        this.members = this.members.filter(m => m.id !== id);
-        this.groups.forEach(g => {
-            const len = g.members.length;
-            g.members = g.members.filter(m => (typeof m === 'string' ? m : m.id) !== id);
-            if (g.leaderId === id) g.leaderId = null;
-            if (this.mode === 'firebase' && g.members.length !== len) {
-                this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({ members: g.members, leaderId: g.leaderId });
-            }
-        });
-        
-        if (this.mode === 'demo') this.saveLocal();
-        this.closeModal('editModal'); this.showToast("成員已刪除"); this.renderMembers();
-    },
-
-    // --- Squads / GVG ---
-    renderSquads: function() {
-        const type = this.currentTab==='gvg'?'gvg':'groups';
-        const search = (document.getElementById('groupSearchInput').value||'').toLowerCase();
-        const grid = document.getElementById('squadGrid'), noMsg = document.getElementById('noSquadsMsg');
-        if(!grid) return; grid.innerHTML='';
-
-        const filtered = this.groups.filter(g => (g.type||'gvg')===type && g.name.toLowerCase().includes(search));
-        if(filtered.length===0) { if(noMsg) noMsg.classList.remove('hidden'); return; }
-        if(noMsg) noMsg.classList.add('hidden');
-
-        const canEdit = ['master','admin','commander'].includes(this.userRole);
-
-        grid.innerHTML = filtered.map(g => {
-            const dateBadge = g.date ? `<span class="bg-white/50 border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded font-bold mr-2">${g.date}</span>` : '';
-            const editBtn = canEdit ? `<button onclick="app.openSquadModal('${g.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-cog"></i></button>` : '';
-            const headerClass = type==='gvg' ? 'bg-red-50 text-red-800 border-b border-red-100' : 'bg-blue-50 text-blue-800 border-b border-blue-100';
-
-            const rows = (g.members||[]).map(m => {
-                const id=typeof m==='string'?m:m.id, status=typeof m==='object'?m.status:'pending';
-                const mem=this.members.find(x=>x.id===id); if(!mem) return '';
-                
-                let border='border-l-slate-300', color='text-slate-400';
-                if((mem.role||'').includes('輸出')) { border='border-l-red-400'; color='text-red-500'; }
-                else if((mem.role||'').includes('坦')) { border='border-l-blue-400'; color='text-blue-500'; }
-                else if((mem.role||'').includes('輔助')) { border='border-l-green-400'; color='text-green-500'; }
-                
-                let action = '';
-                if(type==='gvg') {
-                    let subUI = "";
-                    if (status === 'leave') {
-                        if (canEdit) { 
-                            let busyIds = [];
-                            if (g.date) {
-                                this.groups.forEach(og => {
-                                    if ((og.type||'gvg') === 'gvg' && og.date === g.date && og.id !== g.id) {
-                                        og.members.forEach(gm => {
-                                            const mid = typeof gm === 'string' ? gm : gm.id;
-                                            busyIds.push(mid);
-                                            if (typeof gm === 'object' && gm.subId) busyIds.push(gm.subId);
-                                        });
-                                    }
-                                });
-                            }
-                            const available = this.members.filter(x => {
-                                const inCurrent = g.members.some(gm => (typeof gm==='string'?gm:gm.id) === x.id);
-                                const isBusy = busyIds.includes(x.id);
-                                const isMe = (m.subId === x.id);
-                                if (isMe) return true;
-                                if (inCurrent) return false;
-                                if (isBusy) return false;
-                                return true;
-                            });
-                            
-                            const opts = '<option value="">選擇替補...</option>' + available.map(om => `<option value="${om.id}" ${om.id === m.subId ? 'selected' : ''}>${om.gameName}</option>`).join('');
-                            subUI = `<select class="text-xs border rounded p-1 w-24 mr-2" onchange="app.updateGvgSub('${g.id}', '${id}', this.value)" onclick="event.stopPropagation()">${opts}</select>`;
-                        } else if (m.subId) {
-                            const subMem = this.members.find(x => x.id === m.subId);
-                            if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2 font-bold">⇋ ${subMem.gameName}</span>`;
-                        }
-                    }
-
-                    action = `<div class="flex gap-2 items-center">
-                        ${subUI}
-                        <div class="gvg-light bg-light-yellow ${status==='leave'?'active':''}" title="請假"></div>
-                        <div class="gvg-light ${status==='ready'?'bg-light-green active':'bg-light-red'}" onclick="event.stopPropagation(); app.toggleGvgStatus('${g.id}','${id}','ready')"></div>
-                    </div>`;
-                }
-
-                return `<div class="flex items-center justify-between py-2.5 px-3 border-b border-slate-50 border-l-[3px] ${border} squad-member-row">
-                    <div class="flex items-center gap-3">
-                        <div class="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold ${color}">${(mem.role||'?')[0]}</div>
-                        <div class="flex flex-col"><span class="font-bold text-slate-700 text-sm">${mem.gameName}</span><span class="text-[10px] text-slate-400 font-bold">${(mem.mainClass||'').split('(')[0]}</span></div>
-                    </div>
-                    ${action}
-                </div>`;
-            }).join('');
-
-            return `<div class="squad-card">
-                <div class="p-3 ${headerClass} flex justify-between items-center">
-                    <div><div class="flex items-center mb-1">${dateBadge}<span class="text-xs opacity-70">${g.subject||''}</span></div><h3 class="font-bold text-lg">${g.name}</h3></div>
-                    ${editBtn}
-                </div>
-                <div class="bg-white min-h-[100px]">${rows || '<p class="text-center text-xs text-slate-300 py-4">無成員</p>'}</div>
-            </div>`;
-        }).join('');
-    },
-
-    toggleGvgStatus: function(gid, mid, act) {
-        const g = this.groups.find(x=>x.id===gid); if(!g) return;
-        const idx = g.members.findIndex(m => (typeof m==='string'?m:m.id)===mid); if(idx===-1) return;
-        let m = g.members[idx]; if(typeof m==='string') m={id:m, status:'pending'};
-        
-        if(act==='ready') {
-            if(m.status==='leave') return;
-            m.status = m.status==='ready' ? 'pending' : 'ready';
-        }
-        g.members[idx]=m;
-        if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(gid).update({members:g.members});
-        else this.saveLocal('groups');
-    },
-    
-    updateGvgSub: function(gid, mid, subId) {
-        const g = this.groups.find(x=>x.id===gid); if(!g) return;
-        const idx = g.members.findIndex(m => (typeof m==='string'?m:m.id)===mid); if(idx===-1) return;
-        let m = g.members[idx]; if(typeof m==='string') m={id:m, status:'pending'};
-        
-        m.subId = subId;
-        g.members[idx]=m;
-        
-        if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(gid).update({members:g.members});
-        else this.saveLocal('groups');
-        this.showToast("替補已更新");
-    },
-
-    // --- Squad Modal ---
-    openSquadModal: function(id) {
-        const type=this.currentTab==='gvg'?'gvg':'groups';
-        document.getElementById('squadId').value=id||''; document.getElementById('squadType').value=type;
-        const subSel = document.getElementById('squadSubject');
-        subSel.innerHTML = this.raidThemes.map(t=>`<option value="${t}">${t}</option>`).join('');
-        
-        if(id) {
-            const g = this.groups.find(x=>x.id===id);
-            document.getElementById('squadName').value=g.name; document.getElementById('squadDate').value=g.date||'';
-            document.getElementById('squadSubject').value=g.subject||'GVG 攻城戰'; document.getElementById('squadNote').value=g.note||'';
-            this.currentSquadMembers = g.members.map(m=>typeof m==='string'?{id:m,status:'pending'}:m);
-        } else {
-            document.getElementById('squadName').value=''; document.getElementById('squadDate').value=new Date().toISOString().split('T')[0];
-            this.currentSquadMembers = [];
-        }
-        this.renderSquadMemberSelect();
-        
-        document.getElementById('deleteSquadBtnContainer').innerHTML = id ? `<button onclick="app.deleteSquad('${id}')" class="text-red-400 font-bold text-sm">刪除隊伍</button>` : '';
-        this.showModal('squadModal');
-    },
-    
-    // [重點整合] 這裡必須包含 v3.6 的忙碌過濾邏輯
-    renderSquadMemberSelect: function() {
-        const list = document.getElementById('squadMemberSelect'), search = (document.getElementById('memberSearch').value||'').toLowerCase();
-        
-        const targetDate = document.getElementById('squadDate').value;
-        const currentSquadId = document.getElementById('squadId').value;
-        const type = document.getElementById('squadType').value;
-
-        // Busy Filtering
-        const busyIds = new Set();
-        if (targetDate) {
-            this.groups.forEach(g => {
-                if ((g.type||'gvg') === type && g.date === targetDate && g.id !== currentSquadId) {
-                    g.members.forEach(m => {
-                        busyIds.add(typeof m === 'string' ? m : m.id);
-                        if (typeof m === 'object' && m.subId) busyIds.add(m.subId);
-                    });
-                }
-            });
-        }
-
-        // Leave Filtering
-        const leaveIds = new Set();
-        if (targetDate) {
-            this.leaves.forEach(l => {
-                if (l.date === targetDate) leaveIds.add(l.memberId);
-            });
-        }
-
-        const filtered = this.members.filter(m => (m.gameName+m.mainClass).toLowerCase().includes(search));
-        const isSel = (id) => this.currentSquadMembers.some(x=>x.id===id);
-        
-        filtered.sort((a,b) => {
-            const selA = isSel(a.id), selB = isSel(b.id);
-            if (selA !== selB) return selA ? -1 : 1;
-            const leaveA = leaveIds.has(a.id), leaveB = leaveIds.has(b.id);
-            if (leaveA !== leaveB) return leaveA ? 1 : -1;
-            return 0;
-        });
-        
-        document.getElementById('selectedCount').innerText = this.currentSquadMembers.length;
-        
-        list.innerHTML = filtered.map(m => {
-            if (busyIds.has(m.id)) return ''; // Busy Hide
-
-            const checked = isSel(m.id);
-            const isLeave = leaveIds.has(m.id);
-            
-            const disabledState = isLeave ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-100' : 'cursor-pointer hover:bg-slate-50 border-slate-200';
-            const bgClass = checked ? 'bg-blue-50 border-blue-200' : 'bg-white';
-            const clickAction = isLeave ? '' : `onchange="app.toggleSquadMember('${m.id}')"`;
-            const leaveBadge = isLeave ? '<span class="text-[10px] text-red-500 font-bold ml-2">(請假)</span>' : '';
-
-            return `<label class="flex items-center p-2 border rounded ${isLeave ? disabledState : bgClass}">
-                <input type="checkbox" ${clickAction} ${checked?'checked':''} ${isLeave?'disabled':''} class="mr-3 text-blue-600 rounded">
-                <div><div class="font-bold text-sm text-slate-700">${m.gameName}${leaveBadge}</div><div class="text-xs text-slate-400">${m.mainClass}</div></div>
-            </label>`;
-        }).join('');
-        
-        const lSel = document.getElementById('squadLeader');
-        const currL = lSel.value;
-        lSel.innerHTML = '<option value="">未指定</option>' + this.currentSquadMembers.map(s => {
-            const m=this.members.find(x=>x.id===s.id); return m?`<option value="${m.id}">${m.gameName}</option>`:'';
-        }).join('');
-        lSel.value = currL;
-    },
-    
-    toggleSquadMember: function(id) {
-        const idx = this.currentSquadMembers.findIndex(x=>x.id===id);
-        if(idx>-1) this.currentSquadMembers.splice(idx,1); else this.currentSquadMembers.push({id, status:'pending'});
-        this.renderSquadMemberSelect();
-    },
-    saveSquad: async function() {
-        const id = document.getElementById('squadId').value;
-        const data = {
-            name: document.getElementById('squadName').value, date: document.getElementById('squadDate').value,
-            subject: document.getElementById('squadSubject').value, note: document.getElementById('squadNote').value,
-            type: document.getElementById('squadType').value, leaderId: document.getElementById('squadLeader').value,
-            members: this.currentSquadMembers
-        };
-        if(!data.name) return alert("請輸入名稱");
-        
-        if(!id) {
-            if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).add(data);
-            else { data.id='g'+Date.now(); this.groups.push(data); this.saveLocal('groups'); }
-        } else {
-            if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).update(data);
-            else { const idx=this.groups.findIndex(g=>g.id===id); this.groups[idx]={...this.groups[idx],...data}; this.saveLocal('groups'); }
-        }
-        this.closeModal('squadModal'); this.showToast("隊伍已儲存");
-    },
-    deleteSquad: async function(id) {
-        if(!confirm("刪除?")) return;
-        if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.GROUPS).doc(id).delete();
-        else { this.groups=this.groups.filter(g=>g.id!==id); this.saveLocal('groups'); }
-        this.closeModal('squadModal'); this.showToast("已刪除");
-    },// --- Leave System ---
-    initLeaveForm: function() {
-        document.getElementById('leaveDateInput').value = new Date().toISOString().split('T')[0];
-        document.getElementById('leaveNote').value = '';
-        const s = document.getElementById('leaveSubjectSelect'); s.innerHTML='<option>請選日期</option>'; s.disabled=true;
-        this.updateLeaveSubjectSelect(); this.renderLeaveList();
-    },
-    toggleLeaveForm: function() { document.getElementById('leaveFormContainer').classList.toggle('hidden'); },
-    togglePreLeaveMode: function() {
-        const pre = document.getElementById('isPreLeave').checked;
-        const s = document.getElementById('leaveSubjectSelect'), i = document.getElementById('preLeaveSearchInput');
-        if(pre) { s.innerHTML='<option>全日</option>'; s.disabled=true; i.classList.remove('hidden'); }
-        else { i.classList.add('hidden'); this.updateLeaveSubjectSelect(); }
-    },
-    renderPreLeaveOptions: function(val) {
-        const s = document.getElementById('leaveMemberSelect'); s.disabled=false; s.innerHTML='';
-        this.members.filter(m=>m.gameName.includes(val)).forEach(m => s.innerHTML+=`<option value="${m.id}">${m.gameName}</option>`);
-    },
-    updateLeaveSubjectSelect: function() {
-        if(document.getElementById('isPreLeave').checked) return;
-        const d = document.getElementById('leaveDateInput').value, s = document.getElementById('leaveSubjectSelect');
-        s.innerHTML = '<option disabled selected>主題</option>';
-        const subs = new Set(); this.groups.filter(g=>g.date===d).forEach(g=>subs.add(g.subject));
-        if(subs.size===0) { s.innerHTML='<option>無活動</option>'; s.disabled=true; }
-        else { subs.forEach(x=>s.innerHTML+=`<option value="${x}">${x}</option>`); s.disabled=false; }
-    },
-    updateLeaveMemberSelect: function() {
-        if(document.getElementById('isPreLeave').checked) return;
-        const d = document.getElementById('leaveDateInput').value, sub = document.getElementById('leaveSubjectSelect').value;
-        const s = document.getElementById('leaveMemberSelect'); s.innerHTML='<option>人員</option>'; s.disabled=false;
-        const target = this.groups.filter(g=>g.date===d && g.subject===sub);
-        const mids = new Set(); target.forEach(g=>g.members.forEach(m=>mids.add(typeof m==='string'?m:m.id)));
-        mids.forEach(id => { const m=this.members.find(x=>x.id===id); if(m) s.innerHTML+=`<option value="${m.id}">${m.gameName}</option>`; });
-    },
-    handleLeaveSubmit: function() {
-        const d=document.getElementById('leaveDateInput').value, n=document.getElementById('leaveNote').value;
-        const mid=document.getElementById('leaveMemberSelect').value, pre=document.getElementById('isPreLeave').checked;
-        if(!d||!mid) return alert("資料不全");
-        
-        if(pre) {
-            const l={id:'l'+Date.now(), memberId:mid, date:d, note:n, type:'pre'};
-            if(this.mode==='firebase') this.db.collection('leaves').add(l);
-            else { this.leaves.push(l); this.saveLocal('leaves'); }
-        } else {
-            const sub=document.getElementById('leaveSubjectSelect').value;
-            const gs = this.groups.filter(g=>g.date===d && g.subject===sub);
-            if(gs.length===0) return alert("無此隊伍");
-            gs.forEach(g => {
-                const idx = g.members.findIndex(m=>(typeof m==='string'?m:m.id)===mid);
-                if(idx>-1) {
-                    let m=g.members[idx]; if(typeof m==='string') m={id:m};
-                    m.status='leave'; m.leaveNote=n; g.members[idx]=m;
-                    if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({members:g.members});
-                }
-            });
-            if(this.mode==='demo') this.saveLocal('groups');
-        }
-        this.toggleLeaveForm(); this.renderLeaveList(); this.showToast("請假成功");
-    },
-    renderLeaveList: function() {
-        const grid=document.getElementById('leaveListGrid'), no=document.getElementById('noLeaveMsg');
-        if(!grid) return; grid.innerHTML='';
-        const dFilter=document.getElementById('leaveFilterDate').value, nameFilter=document.getElementById('leaveSearch').value;
-        
-        let list = [];
-        this.leaves.forEach(l => list.push({...l, source:'pre'}));
-        this.groups.forEach(g => g.members.forEach(m => {
-            if(typeof m==='object' && m.status==='leave') list.push({memberId:m.id, date:g.date, note:m.leaveNote, source:'group', gName:g.name});
-        }));
-        
-        const filtered = list.filter(l => {
-            const m = this.members.find(x=>x.id===l.memberId);
-            return (!dFilter || l.date===dFilter) && (!nameFilter || (m&&m.gameName.includes(nameFilter)));
-        });
-        
-        document.getElementById('leaveCountBadge').innerText = `${filtered.length} 人`;
-        if(filtered.length===0) { if(no) no.classList.remove('hidden'); return; }
-        if(no) no.classList.add('hidden');
-        
-        grid.innerHTML = filtered.map(l => {
-            const m = this.members.find(x=>x.id===l.memberId);
-            return `<div class="bg-white p-3 rounded-xl border-l-4 ${l.source==='pre'?'border-l-gray-400':'border-l-orange-400'} shadow-sm flex justify-between">
-                <div>
-                    <div class="font-bold text-slate-800">${m?m.gameName:l.memberId}</div>
-                    <div class="text-xs text-slate-500">${l.date} - ${l.note||'無由'}</div>
-                    ${l.source==='group'?`<div class="text-[10px] bg-slate-100 inline-block px-1 rounded">${l.gName}</div>`:''}
-                </div>
-                <button class="text-slate-300 hover:text-red-400" onclick="app.cancelLeave('${l.id||l.gName}', '${l.memberId}')"><i class="fas fa-times"></i></button>
-            </div>`;
-        }).join('');
-    },
-    cancelLeave: function(lid, mid) {
-        if(!confirm("取消?")) return;
-        if(lid.startsWith('l')) {
-            if(this.mode==='firebase') this.db.collection('leaves').doc(lid).delete();
-            else { this.leaves=this.leaves.filter(x=>x.id!==lid); this.saveLocal('leaves'); }
-        } else {
-            this.groups.forEach(g => {
-                const idx=g.members.findIndex(m=>m.id===mid && m.status==='leave');
-                if(idx>-1) {
-                    g.members[idx].status='pending';
-                    if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.GROUPS).doc(g.id).update({members:g.members});
-                }
-            });
-            if(this.mode==='demo') this.saveLocal('groups');
-        }
-        this.renderLeaveList(); this.showToast("已取消");
-    },
-
-    // --- Activity (UI Logic Optimized) ---
-    renderActivities: function() {
-        const grid=document.getElementById('activityList'); if(!grid) return;
-        if(this.activities.length===0) { document.getElementById('noActivitiesMsg').classList.remove('hidden'); grid.innerHTML=''; return; }
-        document.getElementById('noActivitiesMsg').classList.add('hidden');
-        
-        // [權限檢查] 判斷是否為管理員
-        const canEdit = this.isAdminOrMaster();
-
-        grid.innerHTML = this.activities.map(a => {
-            const winnersHTML = (a.winners || []).map((w, idx) => {
-                const mem = this.members.find(x => x.id === w.memberId);
-                const lightClass = w.claimed ? 'claimed' : '';
-                
-                // [UI優化] 只有管理員有 onclick 和 pointer 游標
-                const clickAttr = canEdit ? `onclick="app.handleClaimReward('${a.id}', ${idx})"` : '';
-                const cursorClass = canEdit ? 'cursor-pointer hover:scale-110' : 'cursor-default opacity-60';
-
-                return `<div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
-                    <div>
-                        <div class="font-bold text-sm text-slate-700">${mem ? mem.gameName : 'Unknown'}</div>
-                        <div class="text-xs text-slate-400">${w.reward || '未填寫獎品'}</div>
-                    </div>
-                    <div class="activity-light ${lightClass} ${cursorClass}" ${clickAttr} title="${canEdit ? '切換領取狀態' : '僅管理員可操作'}">
-                        <i class="fas fa-check text-xs"></i>
-                    </div>
-                </div>`;
-            }).join('');
-
-            return `<div class="activity-card bg-white rounded-xl shadow-sm border border-yellow-200 overflow-hidden">
-                <div class="bg-yellow-50 p-4 border-b border-yellow-100 flex justify-between">
-                    <div><h3 class="font-bold text-lg text-slate-800">${a.name}</h3><p class="text-xs text-slate-500">${a.note || ''}</p></div>
-                    ${canEdit ? `<button onclick="app.openActivityModal('${a.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-edit"></i></button>` : ''}
-                </div>
-                <div class="p-4">${winnersHTML || '<p class="text-center text-xs text-slate-300">無得獎者</p>'}</div>
-            </div>`;
-        }).join('');
-    },
-
-    handleClaimReward: function(actId, wIdx) {
-        if(!this.isAdminOrMaster()) return; // 安全防護
-        const act = this.activities.find(a => a.id === actId);
-        if(!act || !act.winners[wIdx]) return;
-        
-        act.winners[wIdx].claimed = !act.winners[wIdx].claimed;
-        if(act.winners[wIdx].claimed) act.winners[wIdx].claimedAt = Date.now();
-        
-        if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(actId).update({winners:act.winners});
-        else this.saveLocal('activities');
-        this.renderActivities();
-        this.logChange('狀態更新', `獎勵領取變更: ${act.name}`);
-    },
-
-    openActivityModal: function(id) {
-        if(id) {
-            const a = this.activities.find(x=>x.id===id);
-            document.getElementById('activityName').value=a.name; document.getElementById('activityNote').value=a.note;
-            document.getElementById('activityId').value=id; this.currentActivityWinners = a.winners||[];
-            document.getElementById('deleteActivityBtnContainer').innerHTML = `<button onclick="app.deleteActivity('${id}')" class="text-red-400 font-bold text-sm">刪除</button>`;
-        } else {
-            document.getElementById('activityName').value=''; document.getElementById('activityId').value='';
-            this.currentActivityWinners=[]; document.getElementById('deleteActivityBtnContainer').innerHTML='';
-        }
-        this.renderActivityWinnersList(); this.showModal('activityModal');
-    },
-
-    renderActivityWinnersList: function() {
-        const c=document.getElementById('winnerListContainer'); c.innerHTML='';
-        document.getElementById('winnerCount').innerText = this.currentActivityWinners.length;
-        this.currentActivityWinners.forEach((w, idx) => {
-            const m=this.members.find(x=>x.id===w.memberId);
-            c.innerHTML+=`<div class="bg-yellow-50 p-2 rounded text-sm flex items-center gap-2 mb-2">
-                <span class="font-bold w-24 truncate">${m?m.gameName:'未知'}</span>
-                <input type="text" placeholder="獎品內容" class="flex-grow text-xs p-1 border rounded" value="${w.reward||''}" onchange="app.updateWinnerReward(${idx}, this.value)">
-                <button onclick="app.removeWinner(${idx})" class="text-red-400 hover:text-red-600"><i class="fas fa-times"></i></button>
-            </div>`;
-        });
-    },
-
-    updateWinnerReward: function(idx, val) {
-        this.currentActivityWinners[idx].reward = val;
-    },
-    
-    removeWinner: function(idx) {
-        this.currentActivityWinners.splice(idx, 1);
-        this.renderActivityWinnersList();
-    },
-
-    saveActivity: async function() {
-        const id=document.getElementById('activityId').value;
-        const data={ name:document.getElementById('activityName').value, note:document.getElementById('activityNote').value, winners:this.currentActivityWinners };
-        if(!id) {
-            if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).add(data);
-            else { data.id='a'+Date.now(); this.activities.push(data); this.saveLocal('activities'); }
-        } else {
-            if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(id).update(data);
-            else { const idx=this.activities.findIndex(a=>a.id===id); this.activities[idx]={...this.activities[idx],...data}; this.saveLocal('activities'); }
-        }
-        this.closeModal('activityModal'); this.showToast("活動已儲存");
-    },
-    deleteActivity: async function(id) {
-        if(!confirm("刪除?")) return;
-        if(this.mode==='firebase') await this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(id).delete();
-        else { this.activities=this.activities.filter(a=>a.id!==id); this.saveLocal('activities'); }
-        this.closeModal('activityModal'); this.showToast("已刪除");
-    },
-    
-    // --- Winner Select ---
-    openWinnerSelectionModal: function() { this.tempWinnerSelection=[...this.currentActivityWinners]; this.renderWinnerSelect(); this.showModal('winnerSelectionModal'); },
-    renderWinnerSelect: function() {
-        const grid=document.getElementById('winnerSelectGrid'), search=(document.getElementById('winnerSearchInput').value||'').toLowerCase();
-        const filtered=this.members.filter(m=>m.gameName.toLowerCase().includes(search));
-        const isSel=(id)=>this.tempWinnerSelection.some(x=>x.memberId===id);
-        filtered.sort((a,b)=>isSel(b.id)-isSel(a.id));
-        grid.innerHTML = filtered.map(m => {
-            const checked=isSel(m.id);
-            return `<label class="flex items-center p-2 border rounded ${checked?'bg-yellow-50 border-yellow-300':'bg-white'}">
-                <input type="checkbox" onchange="app.toggleWinner('${m.id}')" ${checked?'checked':''} class="mr-2 rounded text-yellow-500"> ${m.gameName}
-            </label>`;
-        }).join('');
-    },
-    toggleWinner: function(id) {
-        const idx=this.tempWinnerSelection.findIndex(x=>x.memberId===id);
-        if(idx>-1) this.tempWinnerSelection.splice(idx,1); else this.tempWinnerSelection.push({memberId:id});
-        this.renderWinnerSelect();
-    },
-    confirmWinnerSelection: function() { this.currentActivityWinners=[...this.tempWinnerSelection]; this.renderActivityWinnersList(); this.closeModal('winnerSelectionModal'); },
-    performLuckyDraw: function() {
-        const pool=this.members.filter(m=>!this.tempWinnerSelection.some(x=>x.memberId===m.id));
-        if(pool.length===0) return alert("無人可抽");
-        const winner=pool[Math.floor(Math.random()*pool.length)];
-        this.toggleWinner(winner.id); this.showToast(`恭喜: ${winner.gameName}`);
-    },
-
-    // --- Utils ---
-    showModal: function(id) { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); },
-    closeModal: function(id) { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); },
-    copyText: function(el, txt) { navigator.clipboard.writeText(txt).then(()=>this.showToast("已複製")); },
-    resetToDemo: function() { if(confirm("重置?")) { localStorage.clear(); location.reload(); } },
-    saveConfig: function() {
-        const v = document.getElementById('firebaseConfigInput').value;
-        if(v) { localStorage.setItem('row_firebase_config', v); alert("已儲存,重新整理生效"); location.reload(); }
-    },
-    
-    // [修復] 修改紀錄功能補回
-    showHistoryModal: function() {
+    showHistoryModal() {
         const list = document.getElementById('historyList');
-        if(!list) return;
-        
-        if(this.history.length === 0) {
-            list.innerHTML = '<p class="text-center text-slate-400 text-sm py-4">尚無紀錄</p>';
-        } else {
-            list.innerHTML = this.history.map(h => {
-                const d = new Date(h.timestamp);
-                const time = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-                return `<div class="border-b border-slate-100 py-2 last:border-0">
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-bold text-slate-700 text-sm">${h.action}</span>
-                        <span class="text-[10px] text-slate-400 font-mono">${time}</span>
-                    </div>
-                    <div class="text-xs text-slate-600">${h.details}</div>
-                    <div class="text-[10px] text-right text-slate-300 mt-1">By: ${h.user}</div>
-                </div>`;
-            }).join('');
-        }
+        list.innerHTML = (this.data.history || []).map(h => `
+            <div class="text-sm border-b border-slate-100 pb-2">
+                <div class="flex justify-between text-slate-400 text-xs mb-1">
+                    <span>${h.time}</span>
+                    <span class="font-bold">${h.user}</span>
+                </div>
+                <div class="text-slate-700">${h.action}</div>
+            </div>
+        `).join('') || '<div class="text-center text-slate-400 py-4">無紀錄</div>';
         this.showModal('historyModal');
     },
 
-    exportDataJSON: function() {
-        const d = { members:this.members, groups:this.groups, activities:this.activities, leaves:this.leaves, history:this.history };
-        const b = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
-        const a = document.createElement('a'); a.href=URL.createObjectURL(b); a.download=`RO_Backup_${new Date().toISOString().split('T')[0]}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    renderAll() {
+        this.renderMembers();
+        this.renderLeaveList();
+        this.renderSquads();
+        this.renderActivities();
+        this.checkAdminUI();
     },
-    importDataJSON: function() {
-        const i = document.createElement('input'); i.type='file'; i.accept='.json';
-        i.onchange = e => {
-            const f=e.target.files[0]; if(!f) return;
-            const r=new FileReader(); r.onload=ev=>{
+
+    switchTab(tab) {
+        document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
+        document.getElementById(`view-${tab}`).classList.remove('hidden');
+        
+        document.querySelectorAll('.nav-pill').forEach(el => {
+            el.classList.remove('bg-slate-800', 'text-white', 'shadow-md');
+            el.classList.add('text-slate-500', 'hover:bg-slate-100');
+        });
+        const activeBtn = document.getElementById(`tab-${tab}`);
+        if(activeBtn) {
+            activeBtn.classList.add('bg-slate-800', 'text-white', 'shadow-md');
+            activeBtn.classList.remove('text-slate-500', 'hover:bg-slate-100');
+        }
+
+        this.currentTab = tab;
+        
+        // Main Action Button Logic
+        const fab = document.getElementById('mainActionBtn');
+        if (tab === 'home') {
+            fab.classList.add('hidden');
+        } else {
+            fab.classList.remove('hidden');
+             // 根據不同分頁設定按鈕顏色
+            fab.className = `fab-btn w-14 h-14 rounded-full flex items-center justify-center text-xl shadow-lg active:scale-90 transition border-4 border-slate-100 ${
+                tab === 'members' ? 'bg-blue-600 text-white hover:bg-blue-700' :
+                tab === 'gvg' ? 'bg-red-600 text-white hover:bg-red-700' :
+                tab === 'leave' ? 'bg-orange-500 text-white hover:bg-orange-600' :
+                tab === 'groups' ? 'bg-green-600 text-white hover:bg-green-700' :
+                tab === 'activity' ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-slate-800 text-white'
+            }`;
+            // 設定圖示
+            fab.innerHTML = `<i class="fas fa-plus"></i>`;
+        }
+    },
+
+    handleMainAction() {
+        if (this.currentTab === 'members') this.openEditModal();
+        if (this.currentTab === 'gvg') this.switchTab('groups');
+        if (this.currentTab === 'leave') this.toggleLeaveForm();
+        if (this.currentTab === 'groups') this.openSquadModal('fixed'); 
+        if (this.currentTab === 'activity') this.openActivityModal();
+    },
+
+    // --- Auth ---
+    openLoginModal() {
+        if (this.user) {
+            if(confirm('確定登出？')) {
+                this.user = null;
+                this.showToast('已登出');
+                this.checkAdminUI();
+            }
+        } else {
+            this.showModal('loginModal');
+        }
+    },
+    
+    handleLogin() {
+        const u = document.getElementById('loginUser').value;
+        const p = document.getElementById('loginPass').value;
+        if (u === 'admin' && p === '8888') {
+            this.user = { role: 'admin' };
+            this.showToast('管理員登入成功');
+            this.closeModal('loginModal');
+            document.getElementById('loginUser').value = '';
+            document.getElementById('loginPass').value = '';
+        } else if (u === 'master' && p === '0000') {
+            this.user = { role: 'master' };
+            this.showToast('會長登入成功');
+            this.closeModal('loginModal');
+        } else {
+            this.showToast('帳號或密碼錯誤', 'error');
+        }
+        this.checkAdminUI();
+    },
+
+    isAdmin() { return this.user && (this.user.role === 'admin' || this.user.role === 'master'); },
+    isMaster() { return this.user && this.user.role === 'master'; },
+    isAdminOrMaster() { return this.isAdmin(); },
+
+    checkAdminUI() {
+        const btn = document.getElementById('adminToggleBtn');
+        const controls = document.getElementById('adminControls');
+        const groupWarning = document.getElementById('adminWarning');
+        
+        if (this.user) {
+            btn.classList.add('text-blue-600', 'bg-blue-50');
+            btn.innerHTML = '<i class="fas fa-user-check"></i>';
+            controls.classList.remove('hidden');
+            if(groupWarning) groupWarning.classList.add('hidden');
+        } else {
+            btn.classList.remove('text-blue-600', 'bg-blue-50');
+            btn.innerHTML = '<i class="fas fa-user-shield"></i>';
+            controls.classList.add('hidden');
+            if(groupWarning) groupWarning.classList.remove('hidden');
+        }
+        
+        // Activity View Permission Warning
+        const actWarning = document.getElementById('activityAdminWarning');
+        const addActBtn = document.getElementById('addActivityBtn');
+        if (this.isMaster()) {
+            if(actWarning) actWarning.classList.add('hidden');
+            if(addActBtn) addActBtn.classList.remove('hidden');
+        } else {
+            if(actWarning) actWarning.classList.remove('hidden');
+            if(addActBtn) addActBtn.classList.add('hidden');
+        }
+
+        this.renderMembers(); 
+        this.renderSquads();
+        this.renderActivities();
+    },
+
+    // --- Members ---
+    renderJobOptions() {
+        const baseSel = document.getElementById('baseJobSelect');
+        baseSel.innerHTML = Object.keys(jobData).map(j => `<option value="${j}">${j}</option>`).join('');
+        this.updateSubJobSelect();
+    },
+
+    updateSubJobSelect() {
+        const base = document.getElementById('baseJobSelect').value;
+        const subSel = document.getElementById('subJobSelect');
+        const subs = jobData[base] || [];
+        subSel.innerHTML = subs.map(s => `<option value="${s}">${s}</option>`).join('');
+    },
+    
+    toggleJobInputMode() {
+        const wrapper = document.getElementById('subJobSelectWrapper');
+        const input = document.getElementById('subJobInput');
+        const btn = document.getElementById('toggleJobBtn');
+        
+        if (input.classList.contains('hidden')) {
+            wrapper.classList.add('hidden');
+            input.classList.remove('hidden');
+            input.focus();
+            btn.classList.add('text-blue-500', 'bg-blue-100');
+        } else {
+            wrapper.classList.remove('hidden');
+            input.classList.add('hidden');
+            btn.classList.remove('text-blue-500', 'bg-blue-100');
+        }
+    },
+
+    renderMembers() {
+        const grid = document.getElementById('memberGrid');
+        const term = document.getElementById('searchInput').value.toLowerCase();
+        
+        let filtered = this.data.members.filter(m => {
+            const matchText = m.gameName.toLowerCase().includes(term) || m.lineName.toLowerCase().includes(term) || m.baseJob.includes(term) || m.subJob.includes(term);
+            const matchJob = this.filterJob === 'all' || m.role === this.filterJob;
+            return matchText && matchJob;
+        });
+
+        // 排序：會長 -> 指揮官 -> 資料管理員 -> 成員
+        const rankOrder = { '會長': 0, '指揮官': 1, '資料管理員': 2, '成員': 3 };
+        filtered.sort((a, b) => (rankOrder[a.rank] || 3) - (rankOrder[b.rank] || 3));
+
+        // 統計
+        document.getElementById('memberCount').innerText = `Total: ${filtered.length}`;
+        document.getElementById('stat-dps').innerText = filtered.filter(m => m.role === '輸出').length;
+        document.getElementById('stat-sup').innerText = filtered.filter(m => m.role === '輔助').length;
+        document.getElementById('stat-tank').innerText = filtered.filter(m => m.role === '坦').length;
+
+        grid.innerHTML = '';
+        if (filtered.length === 0) {
+            document.getElementById('noMemberMsg').classList.remove('hidden');
+        } else {
+            document.getElementById('noMemberMsg').classList.add('hidden');
+            filtered.forEach(m => {
+                const isVIP = m.rank !== '成員';
+                const vipBadge = isVIP ? `<span class="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[10px] font-bold ${m.rank==='會長'?'bg-yellow-100 text-yellow-700':m.rank==='指揮官'?'bg-red-100 text-red-700':'bg-blue-100 text-blue-700'}">${m.rank}</span>` : '';
+                
+                grid.innerHTML += `
+                <div onclick="app.openEditModal('${m.id}')" class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 relative hover:shadow-md transition cursor-pointer group">
+                    ${vipBadge}
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${m.role==='輸出'?'bg-red-50 text-red-600':m.role==='輔助'?'bg-green-50 text-green-600':m.role==='坦'?'bg-blue-50 text-blue-600':'bg-gray-100 text-gray-500'}">
+                            ${m.gameName[0]}
+                        </div>
+                        <div>
+                            <div class="font-black text-slate-700 leading-tight">${m.gameName}</div>
+                            <div class="text-xs text-slate-400 font-bold">${m.lineName}</div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 mb-2">
+                        <span class="text-xs font-bold px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-200">${m.baseJob}</span>
+                        <span class="text-xs font-bold px-2 py-1 rounded-lg bg-slate-50 text-slate-600 border border-slate-200">${m.subJob}</span>
+                    </div>
+                    <div class="text-xs text-slate-400 truncate font-medium">${m.intro || '...'}</div>
+                </div>`;
+            });
+        }
+    },
+
+    setJobFilter(val) { this.filterJob = val; this.renderMembers(); },
+    setFilter(role) { this.filterJob = role; this.renderMembers(); },
+
+    openEditModal(id = null) {
+        if (!this.isAdmin()) return; // 權限
+
+        const form = document.getElementById('memberForm');
+        form.reset();
+        document.getElementById('editId').value = '';
+        document.getElementById('deleteBtnContainer').innerHTML = '';
+        
+        // 切換回選單模式
+        document.getElementById('subJobSelectWrapper').classList.remove('hidden');
+        document.getElementById('subJobInput').classList.add('hidden');
+
+        // 權限控制
+        const rankSelect = document.getElementById('rank');
+        const rankLock = document.getElementById('rankLockIcon');
+        
+        if (this.isMaster()) {
+            rankSelect.disabled = false;
+            rankSelect.classList.remove('bg-gray-50', 'text-gray-400');
+            rankLock.classList.add('hidden');
+        } else {
+            rankSelect.disabled = true;
+            rankSelect.classList.add('bg-gray-50', 'text-gray-400');
+            rankLock.classList.remove('hidden');
+        }
+
+        if (id) {
+            const m = this.getMember(id);
+            if (m) {
+                document.getElementById('editId').value = m.id;
+                document.getElementById('gameName').value = m.gameName;
+                document.getElementById('lineName').value = m.lineName;
+                document.getElementById('baseJobSelect').value = m.baseJob;
+                this.updateSubJobSelect();
+                
+                // 檢查 subJob 是否在清單內
+                const subOptions = Array.from(document.getElementById('subJobSelect').options).map(o => o.value);
+                if (subOptions.includes(m.subJob)) {
+                     document.getElementById('subJobSelect').value = m.subJob;
+                } else {
+                    // 自定義流派，切換到輸入模式
+                    this.toggleJobInputMode();
+                    document.getElementById('subJobInput').value = m.subJob;
+                }
+
+                document.getElementById('role').value = m.role;
+                document.getElementById('rank').value = m.rank;
+                document.getElementById('intro').value = m.intro || '';
+                
+                if (this.isAdmin()) {
+                    document.getElementById('deleteBtnContainer').innerHTML = `<button type="button" onclick="app.deleteMember('${id}')" class="text-red-400 text-xs font-bold hover:bg-red-50 px-3 py-2 rounded-lg">刪除成員</button>`;
+                }
+            }
+        } else {
+             // 新增模式，會長可選，其他人預設成員
+             rankSelect.value = '成員';
+        }
+        this.showModal('editModal');
+    },
+
+    saveMemberData() {
+        const id = document.getElementById('editId').value;
+        const subInput = document.getElementById('subJobInput');
+        const subVal = subInput.classList.contains('hidden') ? document.getElementById('subJobSelect').value : subInput.value;
+
+        const member = {
+            id: id || Date.now().toString(),
+            gameName: document.getElementById('gameName').value,
+            lineName: document.getElementById('lineName').value,
+            baseJob: document.getElementById('baseJobSelect').value,
+            subJob: subVal,
+            role: document.getElementById('role').value,
+            rank: document.getElementById('rank').value,
+            intro: document.getElementById('intro').value
+        };
+
+        if (id) {
+            const index = this.data.members.findIndex(m => m.id === id);
+            this.data.members[index] = member;
+            this.logHistory(`修改成員: ${member.gameName}`);
+        } else {
+            this.data.members.push(member);
+            this.logHistory(`新增成員: ${member.gameName}`);
+        }
+        this.saveData();
+        this.closeModal('editModal');
+        this.showToast('儲存成功');
+    },
+
+    deleteMember(id) {
+        if(confirm('確定刪除此成員？')) {
+            const m = this.getMember(id);
+            this.data.members = this.data.members.filter(m => m.id !== id);
+            this.logHistory(`刪除成員: ${m ? m.gameName : id}`);
+            this.saveData();
+            this.closeModal('editModal');
+            this.showToast('成員已刪除');
+        }
+    },
+
+    // --- Leave ---
+    toggleLeaveForm() {
+        const form = document.getElementById('leaveFormContainer');
+        form.classList.toggle('hidden');
+        if (!form.classList.contains('hidden')) {
+            document.getElementById('leaveDateInput').valueAsDate = new Date();
+            this.updateLeaveSubjectSelect();
+        }
+    },
+
+    togglePreLeaveMode() {
+        const isPre = document.getElementById('isPreLeave').checked;
+        const input = document.getElementById('preLeaveSearchInput');
+        const select = document.getElementById('leaveMemberSelect');
+        
+        if (isPre) {
+            input.classList.remove('hidden');
+            select.innerHTML = '<option value="">請搜尋並選擇成員</option>';
+            select.disabled = false; 
+        } else {
+            input.classList.add('hidden');
+            this.updateLeaveMemberSelect(); // 回復正常邏輯
+        }
+    },
+
+    renderPreLeaveOptions(val) {
+        const select = document.getElementById('leaveMemberSelect');
+        if (!val) { select.innerHTML = '<option value="">請輸入關鍵字</option>'; return; }
+        
+        const matches = this.data.members.filter(m => m.gameName.includes(val) || m.lineName.includes(val));
+        select.innerHTML = matches.map(m => `<option value="${m.id}">${m.gameName} (${m.lineName})</option>`).join('');
+    },
+
+    updateLeaveSubjectSelect() {
+        const dateStr = document.getElementById('leaveDateInput').value;
+        const subjectSel = document.getElementById('leaveSubjectSelect');
+        const memberSel = document.getElementById('leaveMemberSelect');
+        
+        subjectSel.innerHTML = '<option value="" disabled selected>選擇主題</option>';
+        memberSel.disabled = true;
+
+        if (!dateStr) return;
+
+        // 找出當天所有活動 (Squads)
+        const squads = this.data.squads.filter(s => s.date === dateStr);
+        if (squads.length > 0) {
+            const subjects = [...new Set(squads.map(s => s.subject))];
+            subjects.forEach(sub => {
+                subjectSel.innerHTML += `<option value="${sub}">${sub}</option>`;
+            });
+            subjectSel.disabled = false;
+        } else {
+            subjectSel.innerHTML = '<option value="" disabled>當日無活動</option>';
+            subjectSel.disabled = true;
+        }
+    },
+
+    updateLeaveMemberSelect() {
+        if (document.getElementById('isPreLeave').checked) return; // 預先請假模式不跑這段
+
+        const dateStr = document.getElementById('leaveDateInput').value;
+        const subject = document.getElementById('leaveSubjectSelect').value;
+        const memberSel = document.getElementById('leaveMemberSelect');
+
+        memberSel.innerHTML = '<option value="" disabled selected>載入中...</option>';
+        memberSel.disabled = true;
+
+        if (!dateStr || !subject) return;
+
+        // 找出該主題所有隊伍的成員 ID
+        const relatedSquads = this.data.squads.filter(s => s.date === dateStr && s.subject === subject);
+        let memberIds = [];
+        relatedSquads.forEach(s => memberIds.push(...s.members));
+        memberIds = [...new Set(memberIds)]; // 去重
+
+        if (memberIds.length > 0) {
+            memberSel.innerHTML = memberIds.map(mid => {
+                const m = this.getMember(mid);
+                return m ? `<option value="${mid}">${m.gameName}</option>` : '';
+            }).join('');
+            memberSel.disabled = false;
+        } else {
+            memberSel.innerHTML = '<option value="" disabled>無相關成員</option>';
+        }
+    },
+
+    handleLeaveSubmit() {
+        const date = document.getElementById('leaveDateInput').value;
+        const subject = document.getElementById('leaveSubjectSelect').value;
+        const memberId = document.getElementById('leaveMemberSelect').value;
+        const note = document.getElementById('leaveNote').value;
+        const isPre = document.getElementById('isPreLeave').checked;
+
+        if (!date || (!isPre && !subject) || !memberId) return this.showToast('請完整填寫', 'error');
+
+        const finalSubject = isPre ? '預先請假' : subject;
+
+        this.data.leaveRecords.push({
+            id: Date.now().toString(),
+            date,
+            subject: finalSubject,
+            memberId,
+            note
+        });
+        
+        const m = this.getMember(memberId);
+        this.logHistory(`新增請假: ${m ? m.gameName : 'Unknown'} (${date})`);
+
+        this.saveData();
+        this.toggleLeaveForm();
+        this.showToast('請假成功');
+        
+        // 自動刷新列表
+        document.getElementById('leaveFilterDate').value = date;
+        this.renderLeaveList();
+    },
+
+    renderLeaveList() {
+        const list = document.getElementById('leaveListGrid');
+        const search = document.getElementById('leaveSearch').value.toLowerCase();
+        const dateFilter = document.getElementById('leaveFilterDate').value;
+        const subjectFilter = document.getElementById('leaveFilterSubject').value;
+
+        // Update Filters
+        const subjects = [...new Set(this.data.leaveRecords.map(r => r.subject))];
+        const subSel = document.getElementById('leaveFilterSubject');
+        if (subSel.options.length <= 1) { // 避免無限重繪
+             subSel.innerHTML = '<option value="">所有主題</option>' + subjects.map(s => `<option value="${s}">${s}</option>`).join('');
+        }
+
+        let filtered = this.data.leaveRecords.filter(r => {
+            const m = this.getMember(r.memberId);
+            const nameMatch = m && (m.gameName.includes(search) || m.lineName.includes(search));
+            const dateMatch = !dateFilter || r.date === dateFilter;
+            const subMatch = !subjectFilter || r.subject === subjectFilter;
+            return nameMatch && dateMatch && subMatch;
+        });
+
+        filtered.sort((a, b) => new Date(b.date) - new Date(a.date)); // 日期新到舊
+
+        document.getElementById('leaveCountBadge').innerText = `${filtered.length} 人`;
+
+        list.innerHTML = '';
+        if (filtered.length === 0) {
+            document.getElementById('noLeaveMsg').classList.remove('hidden');
+        } else {
+            document.getElementById('noLeaveMsg').classList.add('hidden');
+            filtered.forEach(r => {
+                const m = this.getMember(r.memberId);
+                if (!m) return;
+                list.innerHTML += `
+                    <div class="bg-white rounded-xl p-3 shadow-sm border border-slate-100 flex justify-between items-center group">
+                        <div class="flex items-center gap-3">
+                            <div class="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-500 text-sm">
+                                ${r.date.slice(5).replace('-','/')}
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-700 flex items-center gap-2">
+                                    ${m.gameName}
+                                    <span class="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded">${r.subject}</span>
+                                </div>
+                                <div class="text-xs text-slate-400">${r.note || '無備註'}</div>
+                            </div>
+                        </div>
+                        <button onclick="app.deleteLeave('${r.id}')" class="text-slate-300 hover:text-red-400 p-2 opacity-0 group-hover:opacity-100 transition"><i class="fas fa-trash-alt"></i></button>
+                    </div>
+                `;
+            });
+        }
+    },
+
+    deleteLeave(id) {
+        if(confirm('刪除此請假紀錄？')) {
+            this.data.leaveRecords = this.data.leaveRecords.filter(r => r.id !== id);
+            this.saveData();
+            this.renderLeaveList();
+        }
+    },
+
+    // --- Squads ---
+    renderSquads() {
+        const grid = document.getElementById('squadGrid');
+        const term = document.getElementById('groupSearchInput').value.toLowerCase();
+        
+        let filtered = this.data.squads.filter(s => s.name.toLowerCase().includes(term) || s.subject.includes(term));
+        filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        grid.innerHTML = '';
+        if (filtered.length === 0) {
+            document.getElementById('noSquadsMsg').classList.remove('hidden');
+        } else {
+            document.getElementById('noSquadsMsg').classList.add('hidden');
+            filtered.forEach(s => {
+                const leader = this.getMember(s.leader);
+                const membersHtml = s.members.map(mid => {
+                    const m = this.getMember(mid);
+                    if (!m) return '';
+                    
+                    // 檢查該成員在該日期、該主題是否有請假
+                    const isLeave = this.data.leaveRecords.some(r => r.date === s.date && r.memberId === mid && (r.subject === s.subject || r.subject === '預先請假'));
+                    const statusClass = isLeave ? 'bg-red-50 text-red-400 decoration-red-400 line-through' : 'bg-slate-50 text-slate-600';
+                    
+                    return `<span class="inline-block px-2 py-1 rounded text-xs font-bold mr-1 mb-1 border border-slate-100 ${statusClass}">${m.gameName}</span>`;
+                }).join('');
+
+                const editAction = this.isAdminOrMaster() ? `onclick="app.openSquadModal('fixed', '${s.id}')"` : '';
+                const cursorClass = this.isAdminOrMaster() ? 'cursor-pointer hover:shadow-md' : 'cursor-default opacity-80';
+
+                grid.innerHTML += `
+                    <div class="bg-white rounded-2xl p-5 shadow-sm border-l-4 border-l-green-500 border-slate-100 transition relative group ${cursorClass}" ${editAction}>
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h3 class="font-black text-lg text-slate-700">${s.name}</h3>
+                                <div class="flex items-center gap-2 text-xs font-bold text-slate-400 mt-1">
+                                    <span class="bg-green-100 text-green-700 px-2 py-0.5 rounded">${s.subject}</span>
+                                    <span><i class="fas fa-calendar-alt mr-1"></i>${s.date}</span>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-xs text-slate-400 font-bold mb-1">隊長</div>
+                                <div class="font-bold text-slate-700">${leader ? leader.gameName : '未定'}</div>
+                            </div>
+                        </div>
+                        <div class="mb-3 flex flex-wrap gap-1">${membersHtml}</div>
+                        <div class="text-xs text-slate-400 font-medium bg-slate-50 p-2 rounded-lg">${s.note || '無備註'}</div>
+                    </div>
+                `;
+            });
+        }
+    },
+
+    openSquadModal(type, id = null) {
+        if (!this.isAdminOrMaster()) return;
+
+        this.currentSquadId = id;
+        document.getElementById('squadType').value = type;
+        document.getElementById('squadMemberSelect').innerHTML = ''; // Clear first
+
+        // Render Subjects
+        this.renderSubjectOptions();
+
+        if (id) {
+            const s = this.data.squads.find(Sq => Sq.id === id);
+            document.getElementById('squadModalTitle').innerText = '編輯隊伍';
+            document.getElementById('squadName').value = s.name;
+            document.getElementById('squadDate').value = s.date;
+            document.getElementById('squadSubject').value = s.subject;
+            document.getElementById('squadNote').value = s.note;
+            
+            // Render Leader Options & Set Value
+            this.renderSquadLeaderSelect(s.members, s.leader);
+
+            // Render Members & Check
+            this.renderSquadMemberSelect(s.members);
+
+            document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-400 text-xs font-bold hover:bg-red-50 px-3 py-2 rounded-lg">刪除隊伍</button>`;
+        } else {
+            document.getElementById('squadModalTitle').innerText = '新增隊伍';
+            document.getElementById('squadName').value = '';
+            document.getElementById('squadDate').value = new Date().toISOString().split('T')[0];
+            document.getElementById('squadNote').value = '';
+            document.getElementById('squadLeader').innerHTML = '<option value="">請先選擇隊員</option>';
+            this.renderSquadMemberSelect([]);
+            document.getElementById('deleteSquadBtnContainer').innerHTML = '';
+        }
+
+        this.showModal('squadModal');
+    },
+
+    renderSubjectOptions() {
+        const sel = document.getElementById('squadSubject');
+        sel.innerHTML = this.data.customSquadSubjects.map(s => `<option value="${s}">${s}</option>`).join('');
+    },
+
+    addCustomSubject() {
+        const val = prompt('輸入新主題名稱:');
+        if(val && !this.data.customSquadSubjects.includes(val)) {
+            this.data.customSquadSubjects.push(val);
+            this.saveData();
+            this.renderSubjectOptions();
+            document.getElementById('squadSubject').value = val;
+        }
+    },
+    
+    deleteCustomSubject() {
+        const val = document.getElementById('squadSubject').value;
+        if(confirm(`刪除主題 "${val}"？`)) {
+            this.data.customSquadSubjects = this.data.customSquadSubjects.filter(s => s !== val);
+            this.saveData();
+            this.renderSubjectOptions();
+        }
+    },
+
+    renderSquadMemberSelect(checkedIds = []) {
+        const container = document.getElementById('squadMemberSelect');
+        const term = document.getElementById('memberSearch').value.toLowerCase();
+        
+        let html = '';
+        let count = 0;
+
+        // Group members by role for better selection
+        const roles = ['坦克', '輔助', '輸出', '待定'];
+        const membersByRole = {};
+        
+        this.data.members.forEach(m => {
+            const role = m.role === '坦' ? '坦克' : m.role;
+            if(!membersByRole[role]) membersByRole[role] = [];
+            membersByRole[role].push(m);
+        });
+
+        roles.forEach(role => {
+            const ms = membersByRole[role] || [];
+            const filteredMs = ms.filter(m => m.gameName.toLowerCase().includes(term));
+            
+            if(filteredMs.length > 0) {
+                html += `<div class="col-span-full text-xs font-bold text-slate-400 mt-2 mb-1 pl-1">${role}</div>`;
+                filteredMs.forEach(m => {
+                    const isChecked = checkedIds.includes(m.id) ? 'checked' : '';
+                    if(isChecked) count++;
+                    html += `
+                        <label class="flex items-center p-2 rounded-lg border border-slate-100 hover:bg-blue-50 cursor-pointer transition ${isChecked ? 'bg-blue-50 border-blue-200' : 'bg-white'}">
+                            <input type="checkbox" name="squadMember" value="${m.id}" ${isChecked} class="w-4 h-4 text-blue-600 rounded mr-2" onchange="app.updateSquadLeaderOptions()">
+                            <div>
+                                <div class="font-bold text-sm text-slate-700">${m.gameName}</div>
+                                <div class="text-[10px] text-slate-400">${m.baseJob}</div>
+                            </div>
+                        </label>
+                    `;
+                });
+            }
+        });
+
+        container.innerHTML = html;
+        document.getElementById('selectedCount').innerText = count;
+    },
+
+    updateSquadLeaderOptions() {
+        const checkboxes = document.querySelectorAll('input[name="squadMember"]:checked');
+        const ids = Array.from(checkboxes).map(c => c.value);
+        const currentLeader = document.getElementById('squadLeader').value;
+        
+        this.renderSquadLeaderSelect(ids, currentLeader);
+        document.getElementById('selectedCount').innerText = ids.length;
+    },
+
+    renderSquadLeaderSelect(memberIds, selectedId) {
+        const sel = document.getElementById('squadLeader');
+        if (memberIds.length === 0) {
+            sel.innerHTML = '<option value="">未指定</option>';
+            return;
+        }
+        
+        let html = '<option value="">未指定</option>';
+        memberIds.forEach(id => {
+            const m = this.getMember(id);
+            if(m) {
+                html += `<option value="${id}" ${id === selectedId ? 'selected' : ''}>${m.gameName}</option>`;
+            }
+        });
+        sel.innerHTML = html;
+    },
+
+    saveSquad() {
+        const checkboxes = document.querySelectorAll('input[name="squadMember"]:checked');
+        const members = Array.from(checkboxes).map(c => c.value);
+        const name = document.getElementById('squadName').value;
+        
+        if (!name) return this.showToast('請輸入隊伍名稱', 'error');
+
+        const squad = {
+            id: this.currentSquadId || Date.now().toString(),
+            name: name,
+            date: document.getElementById('squadDate').value,
+            subject: document.getElementById('squadSubject').value,
+            leader: document.getElementById('squadLeader').value,
+            members: members,
+            note: document.getElementById('squadNote').value,
+            type: document.getElementById('squadType').value
+        };
+
+        if (this.currentSquadId) {
+            const idx = this.data.squads.findIndex(s => s.id === this.currentSquadId);
+            this.data.squads[idx] = squad;
+            this.logHistory(`更新隊伍: ${squad.name}`);
+        } else {
+            this.data.squads.push(squad);
+            this.logHistory(`新增隊伍: ${squad.name}`);
+        }
+
+        this.saveData();
+        this.closeModal('squadModal');
+        this.showToast('隊伍儲存成功');
+    },
+
+    deleteSquad(id) {
+        if(confirm('確定刪除此隊伍？')) {
+            const s = this.data.squads.find(sq => sq.id === id);
+            this.data.squads = this.data.squads.filter(sq => sq.id !== id);
+            this.logHistory(`刪除隊伍: ${s ? s.name : id}`);
+            this.saveData();
+            this.closeModal('squadModal');
+            this.showToast('隊伍已刪除');
+        }
+    },
+
+    // --- Activities ---
+    // [Updated V5.2] 渲染活動列表 (含搜尋與日期)
+    renderActivities() {
+        const container = document.getElementById('activityList');
+        const searchTerm = (document.getElementById('activitySearchInput')?.value || '').toLowerCase().trim();
+        
+        let list = this.data.activities || [];
+        // 依日期排序 (新到舊)
+        list.sort((a, b) => new Date(b.date || '2000-01-01') - new Date(a.date || '2000-01-01'));
+
+        if (searchTerm) {
+            list = list.filter(act => {
+                const matchName = (act.name || '').toLowerCase().includes(searchTerm);
+                const matchWinner = (act.winners || []).some(w => {
+                    const member = this.getMember(w.id);
+                    const name = member ? (member.gameName + member.lineName) : '未知';
+                    return name.toLowerCase().includes(searchTerm);
+                });
+                return matchName || matchWinner;
+            });
+        }
+
+        container.innerHTML = '';
+        
+        if (list.length === 0) {
+            document.getElementById('noActivitiesMsg').classList.remove('hidden');
+            return;
+        }
+        document.getElementById('noActivitiesMsg').classList.add('hidden');
+
+        list.forEach(act => {
+            const dateStr = act.date ? act.date.replace(/-/g, '/') : '無日期';
+            const winnersHtml = (act.winners || []).map(w => {
+                const m = this.getMember(w.id);
+                const displayName = m ? m.gameName : '未知成員';
+                return `<span class="inline-block bg-yellow-100 text-yellow-700 text-xs px-2 py-1 rounded-lg font-bold mr-1 mb-1 border border-yellow-200">${displayName}</span>`;
+            }).join('');
+
+            const deleteBtn = this.isMaster() ? 
+                `<button onclick="app.confirmDeleteActivity('${act.id}')" class="text-slate-300 hover:text-red-400 p-2"><i class="fas fa-trash-alt"></i></button>` : '';
+
+            const editAction = this.isMaster() ? `onclick="app.openActivityModal('${act.id}')"` : '';
+            const cursorClass = this.isMaster() ? 'cursor-pointer hover:shadow-md' : 'cursor-default';
+
+            container.innerHTML += `
+                <div class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100 flex flex-col relative group transition-all duration-300 ${cursorClass}" ${editAction}>
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md mb-1 inline-block tracking-wide">${dateStr}</span>
+                            <h3 class="font-black text-slate-700 text-lg leading-tight">${act.name}</h3>
+                        </div>
+                        ${deleteBtn}
+                    </div>
+                    <p class="text-xs text-slate-500 mb-3 font-bold line-clamp-2">${act.note || '無說明'}</p>
+                    <div class="mt-auto pt-2 border-t border-slate-50">
+                        <div class="flex flex-wrap">${winnersHtml || '<span class="text-xs text-slate-300 font-bold">尚無得獎者</span>'}</div>
+                    </div>
+                </div>
+            `;
+        });
+    },
+
+    // [Updated V5.2] 開啟活動 Modal (含日期初始值)
+    openActivityModal(id = null) {
+        if(!this.isMaster()) return; 
+
+        this.currentActivityId = id;
+        this.tempWinners = []; 
+
+        if (id) {
+            const act = this.data.activities.find(a => a.id === id);
+            if (act) {
+                document.getElementById('activityName').value = act.name;
+                document.getElementById('activityNote').value = act.note || '';
+                document.getElementById('activityDate').value = act.date || new Date().toISOString().split('T')[0];
+                this.tempWinners = [...(act.winners || [])];
+            }
+        } else {
+            document.getElementById('activityName').value = '';
+            document.getElementById('activityNote').value = '';
+            document.getElementById('activityDate').value = new Date().toISOString().split('T')[0];
+            this.tempWinners = [];
+        }
+
+        this.renderWinnerList();
+        document.getElementById('deleteActivityBtnContainer').innerHTML = id ? 
+            `<button type="button" onclick="app.confirmDeleteActivity('${id}')" class="text-red-400 text-xs font-bold hover:bg-red-50 px-3 py-2 rounded-lg">刪除此活動</button>` : '';
+        
+        this.showModal('activityModal');
+    },
+
+    // [Updated V5.2] 儲存活動 (含日期)
+    saveActivity() {
+        const name = document.getElementById('activityName').value.trim();
+        const note = document.getElementById('activityNote').value.trim();
+        const date = document.getElementById('activityDate').value;
+
+        if (!name) return this.showToast('請輸入活動名稱', 'error');
+        if (!date) return this.showToast('請選擇日期', 'error');
+
+        if (this.currentActivityId) {
+            const index = this.data.activities.findIndex(a => a.id === this.currentActivityId);
+            if (index !== -1) {
+                this.data.activities[index] = {
+                    ...this.data.activities[index],
+                    name,
+                    note,
+                    date,
+                    winners: this.tempWinners
+                };
+                this.logHistory(`更新活動: ${name}`);
+            }
+        } else {
+            const newActivity = {
+                id: Date.now().toString(),
+                name,
+                note,
+                date,
+                winners: this.tempWinners
+            };
+            this.data.activities.push(newActivity);
+            this.logHistory(`新增活動: ${name}`);
+        }
+
+        this.saveData();
+        this.closeModal('activityModal');
+        this.renderActivities();
+        this.showToast('活動儲存成功');
+    },
+
+    confirmDeleteActivity(id) {
+        event.stopPropagation();
+        if(confirm('刪除此活動？')) {
+            this.data.activities = this.data.activities.filter(a => a.id !== id);
+            this.saveData();
+            this.renderActivities();
+            this.closeModal('activityModal'); 
+        }
+    },
+
+    // Winner Selection Logic
+    openWinnerSelectionModal() {
+        this.showModal('winnerSelectionModal');
+        this.renderWinnerMemberSelect();
+    },
+
+    renderWinnerMemberSelect() {
+        const grid = document.getElementById('winnerSelectGrid');
+        const term = document.getElementById('winnerSearchInput').value.toLowerCase();
+        
+        // Exclude already selected
+        const selectedIds = this.tempWinners.map(w => w.id);
+        
+        const candidates = this.data.members.filter(m => 
+            !selectedIds.includes(m.id) && 
+            (m.gameName.toLowerCase().includes(term) || m.lineName.toLowerCase().includes(term))
+        );
+
+        grid.innerHTML = candidates.map(m => `
+            <label class="flex items-center p-3 rounded-xl border border-slate-100 hover:bg-yellow-50 cursor-pointer transition">
+                <input type="checkbox" name="winnerCandidate" value="${m.id}" class="w-5 h-5 text-yellow-500 rounded mr-3">
+                <div class="font-bold text-slate-700">${m.gameName}</div>
+            </label>
+        `).join('') || '<div class="col-span-full text-center text-slate-400 py-4">查無成員</div>';
+    },
+
+    performLuckyDraw() {
+        const grid = document.getElementById('winnerSelectGrid');
+        const checkboxes = grid.querySelectorAll('input[type="checkbox"]');
+        const available = Array.from(checkboxes).filter(cb => !cb.checked);
+        
+        if (available.length === 0) return this.showToast('無可選成員', 'error');
+        
+        // Random pick one
+        const winner = available[Math.floor(Math.random() * available.length)];
+        winner.checked = true;
+        winner.closest('label').classList.add('bg-yellow-100', 'border-yellow-300', 'scale-105');
+        setTimeout(() => winner.closest('label').classList.remove('scale-105'), 200);
+    },
+
+    confirmWinnerSelection() {
+        const checkboxes = document.querySelectorAll('input[name="winnerCandidate"]:checked');
+        checkboxes.forEach(cb => {
+            this.tempWinners.push({ id: cb.value });
+        });
+        
+        this.closeModal('winnerSelectionModal');
+        this.renderWinnerList();
+    },
+
+    renderWinnerList() {
+        const container = document.getElementById('winnerListContainer');
+        const countSpan = document.getElementById('winnerCount');
+        
+        countSpan.innerText = this.tempWinners.length;
+        
+        container.innerHTML = this.tempWinners.map((w, index) => {
+            const m = this.getMember(w.id);
+            if(!m) return '';
+            return `
+                <div class="flex justify-between items-center bg-slate-50 px-3 py-2 rounded-lg">
+                    <span class="font-bold text-slate-700 text-sm">${m.gameName}</span>
+                    <button onclick="app.removeTempWinner(${index})" class="text-slate-400 hover:text-red-400"><i class="fas fa-times"></i></button>
+                </div>
+            `;
+        }).join('');
+    },
+
+    removeTempWinner(index) {
+        this.tempWinners.splice(index, 1);
+        this.renderWinnerList();
+    },
+
+    // --- Utils ---
+    getMember(id) { return this.data.members.find(m => m.id === id); },
+    
+    showModal(id) { document.getElementById(id).classList.remove('hidden'); },
+    closeModal(id) { document.getElementById(id).classList.add('hidden'); },
+    
+    showToast(msg, type = 'success') {
+        const toast = document.getElementById('globalToast');
+        const icon = document.getElementById('toastIcon');
+        document.getElementById('toastMsg').innerText = msg;
+        
+        if (type === 'error') {
+            icon.className = 'fas fa-exclamation-circle text-red-400';
+        } else {
+            icon.className = 'fas fa-check-circle text-green-400';
+        }
+        
+        toast.classList.remove('opacity-0', 'translate-y-4', 'pointer-events-none');
+        setTimeout(() => {
+            toast.classList.add('opacity-0', 'translate-y-4', 'pointer-events-none');
+        }, 3000);
+    },
+
+    // --- Import/Export ---
+    exportDataJSON() {
+        const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ro_guild_data_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    },
+
+    importDataJSON() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'application/json';
+        input.onchange = e => {
+            const file = e.target.files[0];
+            const reader = new FileReader();
+            reader.onload = event => {
                 try {
-                    const d=JSON.parse(ev.target.result);
-                    if(confirm(`還原 ${d.members.length} 位成員?`)) {
-                        this.members=d.members||[]; this.groups=d.groups||[]; this.activities=d.activities||[];
-                        this.leaves=d.leaves||[]; this.history=d.history||[];
-                        this.saveLocal('all'); alert("成功"); location.reload();
-                    }
-                } catch(err){ alert("格式錯誤"); }
-            }; r.readAsText(f);
-        }; i.click();
+                    this.data = JSON.parse(event.target.result);
+                    this.saveData();
+                    alert('匯入成功');
+                } catch (err) {
+                    alert('格式錯誤');
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
     },
-    exportCSV: function() {
-        let csv = "\uFEFF遊戲ID,Line,職業,定位,職位\n";
-        this.members.forEach(m => csv+=`${m.gameName},${m.lineName},${m.mainClass},${m.role},${m.rank}\n`);
-        const a = document.createElement('a'); a.href='data:text/csv;charset=utf-8,'+encodeURI(csv); a.download='members.csv';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+
+    exportCSV() {
+        let csv = '\uFEFF遊戲ID,Line暱稱,職業,流派,定位,職位,備註\n';
+        this.data.members.forEach(m => {
+            csv += `${m.gameName},${m.lineName},${m.baseJob},${m.subJob},${m.role},${m.rank},${m.intro || ''}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `ro_members_${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
     }
 };
 
-// 綁定 window 並啟動
-window.app = App;
-document.addEventListener('DOMContentLoaded', () => App.init());
+window.app = app;
+document.addEventListener('DOMContentLoaded', () => app.init());
