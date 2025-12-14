@@ -711,21 +711,30 @@ const App = {
         this.renderLeaveList(); this.showToast("已取消");
     },
 
-    // --- Activity ---
+    // --- Activity (UI Logic Optimized) ---
     renderActivities: function() {
         const grid=document.getElementById('activityList'); if(!grid) return;
         if(this.activities.length===0) { document.getElementById('noActivitiesMsg').classList.remove('hidden'); grid.innerHTML=''; return; }
         document.getElementById('noActivitiesMsg').classList.add('hidden');
+        
+        // [權限檢查] 判斷是否為管理員
+        const canEdit = this.isAdminOrMaster();
+
         grid.innerHTML = this.activities.map(a => {
             const winnersHTML = (a.winners || []).map((w, idx) => {
                 const mem = this.members.find(x => x.id === w.memberId);
                 const lightClass = w.claimed ? 'claimed' : '';
+                
+                // [UI優化] 只有管理員有 onclick 和 pointer 游標
+                const clickAttr = canEdit ? `onclick="app.handleClaimReward('${a.id}', ${idx})"` : '';
+                const cursorClass = canEdit ? 'cursor-pointer hover:scale-110' : 'cursor-default opacity-60';
+
                 return `<div class="flex justify-between items-center py-2 border-b border-slate-100 last:border-0">
                     <div>
                         <div class="font-bold text-sm text-slate-700">${mem ? mem.gameName : 'Unknown'}</div>
                         <div class="text-xs text-slate-400">${w.reward || '未填寫獎品'}</div>
                     </div>
-                    <div class="activity-light ${lightClass}" onclick="app.handleClaimReward('${a.id}', ${idx})">
+                    <div class="activity-light ${lightClass} ${cursorClass}" ${clickAttr} title="${canEdit ? '切換領取狀態' : '僅管理員可操作'}">
                         <i class="fas fa-check text-xs"></i>
                     </div>
                 </div>`;
@@ -734,16 +743,15 @@ const App = {
             return `<div class="activity-card bg-white rounded-xl shadow-sm border border-yellow-200 overflow-hidden">
                 <div class="bg-yellow-50 p-4 border-b border-yellow-100 flex justify-between">
                     <div><h3 class="font-bold text-lg text-slate-800">${a.name}</h3><p class="text-xs text-slate-500">${a.note || ''}</p></div>
-                    ${this.isAdminOrMaster() ? `<button onclick="app.openActivityModal('${a.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-edit"></i></button>` : ''}
+                    ${canEdit ? `<button onclick="app.openActivityModal('${a.id}')" class="text-slate-400 hover:text-slate-600"><i class="fas fa-edit"></i></button>` : ''}
                 </div>
                 <div class="p-4">${winnersHTML || '<p class="text-center text-xs text-slate-300">無得獎者</p>'}</div>
             </div>`;
         }).join('');
     },
 
-    // [重點] 領獎邏輯 (v4.0 功能)
     handleClaimReward: function(actId, wIdx) {
-        if(!this.isAdminOrMaster()) return;
+        if(!this.isAdminOrMaster()) return; // 安全防護
         const act = this.activities.find(a => a.id === actId);
         if(!act || !act.winners[wIdx]) return;
         
@@ -753,6 +761,7 @@ const App = {
         if(this.mode==='firebase') this.db.collection(COLLECTION_NAMES.ACTIVITIES).doc(actId).update({winners:act.winners});
         else this.saveLocal('activities');
         this.renderActivities();
+        this.logChange('狀態更新', `獎勵領取變更: ${act.name}`);
     },
 
     openActivityModal: function(id) {
@@ -768,7 +777,6 @@ const App = {
         this.renderActivityWinnersList(); this.showModal('activityModal');
     },
 
-    // [重點] 獎品輸入 (v4.0 功能)
     renderActivityWinnersList: function() {
         const c=document.getElementById('winnerListContainer'); c.innerHTML='';
         document.getElementById('winnerCount').innerText = this.currentActivityWinners.length;
@@ -847,6 +855,30 @@ const App = {
         if(v) { localStorage.setItem('row_firebase_config', v); alert("已儲存,重新整理生效"); location.reload(); }
     },
     
+    // [修復] 修改紀錄功能補回
+    showHistoryModal: function() {
+        const list = document.getElementById('historyList');
+        if(!list) return;
+        
+        if(this.history.length === 0) {
+            list.innerHTML = '<p class="text-center text-slate-400 text-sm py-4">尚無紀錄</p>';
+        } else {
+            list.innerHTML = this.history.map(h => {
+                const d = new Date(h.timestamp);
+                const time = `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+                return `<div class="border-b border-slate-100 py-2 last:border-0">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-bold text-slate-700 text-sm">${h.action}</span>
+                        <span class="text-[10px] text-slate-400 font-mono">${time}</span>
+                    </div>
+                    <div class="text-xs text-slate-600">${h.details}</div>
+                    <div class="text-[10px] text-right text-slate-300 mt-1">By: ${h.user}</div>
+                </div>`;
+            }).join('');
+        }
+        this.showModal('historyModal');
+    },
+
     exportDataJSON: function() {
         const d = { members:this.members, groups:this.groups, activities:this.activities, leaves:this.leaves, history:this.history };
         const b = new Blob([JSON.stringify(d,null,2)], {type:'application/json'});
