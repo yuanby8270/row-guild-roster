@@ -1,5 +1,5 @@
-// js/app.js
-// Production v9.6 - GVG Export Chart Feature
+// js/app.js - v9.7 Full Fixed Version
+// 整合了所有功能：修復邊框、自動篩選日期/主題、GVG戰報圖表匯出
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -18,6 +18,7 @@ const App = {
     currentTab: 'home', 
     currentFilter: 'all', currentJobFilter: 'all', 
     
+    // 篩選狀態
     currentSquadRoleFilter: 'all', 
     currentModalRoleFilter: 'all', 
     currentSquadDateFilter: 'all', 
@@ -360,7 +361,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
-    // ... PART 2 FOLLOWS ...renderSquads: function() {
+    renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
         const canEdit = ['master', 'admin', 'commander'].includes(this.userRole);
