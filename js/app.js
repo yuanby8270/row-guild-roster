@@ -1,4 +1,4 @@
-// js/app.js - v10.3 Optimized Export View (Big Text, Compact, Eye-Care)
+// js/app.js - v10.4 Row-based Compact Summary Layout
 
 // 1. 強制檢查 Config
 if (typeof window.AppConfig === 'undefined') {
@@ -359,6 +359,7 @@ const App = {
         this.logChange('成員刪除', `ID: ${id}`, id); this.closeModal('editModal');
     },
 
+    // 2. 修正 GVG 團體戰版面跑位 (關鍵修改：強制 Tailwind 樣式，不依賴外部 CSS)
     renderSquads: function() {
         const type = this.currentTab === 'gvg' ? 'gvg' : 'groups';
         const search = document.getElementById('groupSearchInput').value.toLowerCase();
@@ -381,15 +382,17 @@ const App = {
         const grid = document.getElementById('squadGrid'), emptyMsg = document.getElementById('noSquadsMsg');
         grid.innerHTML = '';
 
+        // [Fix] 強制佔滿整行 (col-span-full) 防止跑版
         const controlsContainer = document.createElement('div');
-        controlsContainer.className = "col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-3 mb-4 p-1 w-full items-start md:items-center";
+        controlsContainer.className = "col-span-1 lg:col-span-2 flex flex-col md:flex-row gap-3 mb-4 p-1 w-full";
         
         const dateOptions = uniqueDates.map(d => `<option value="${d}" ${this.currentSquadDateFilter === d ? 'selected' : ''}>${d}</option>`).join('');
-        const dateSelectHTML = `<div class="relative min-w-[150px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="far fa-calendar-alt"></i></div><select onchange="app.setSquadDateFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有日期</option>${dateOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
+        const dateSelectHTML = `<div class="relative min-w-[160px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="far fa-calendar-alt"></i></div><select onchange="app.setSquadDateFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有日期</option>${dateOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
 
         const subjectOptions = themes.map(t => `<option value="${t}" ${this.currentSquadSubjectFilter === t ? 'selected' : ''}>${t}</option>`).join('');
-        const subjectSelectHTML = `<div class="relative min-w-[150px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-tag"></i></div><select onchange="app.setSquadSubjectFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有主題</option>${subjectOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
+        const subjectSelectHTML = `<div class="relative min-w-[160px]"><div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400"><i class="fas fa-tag"></i></div><select onchange="app.setSquadSubjectFilter(this.value)" class="pl-9 pr-4 py-2 w-full bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-200 appearance-none shadow-sm cursor-pointer hover:bg-slate-50 transition"><option value="all">所有主題</option>${subjectOptions}</select><div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-slate-400 text-xs"><i class="fas fa-chevron-down"></i></div></div>`;
         
+        // [New] 匯出按鈕
         const exportBtnHTML = `<button onclick="app.openSummaryModal()" class="px-4 py-2 bg-slate-800 text-white rounded-xl text-sm font-bold shadow-sm hover:bg-slate-700 transition flex items-center whitespace-nowrap"><i class="fas fa-table mr-2"></i>匯出圖表</button>`;
 
         const filters = [{id: 'all', label: '全部', color: 'bg-slate-800 text-white'}, {id: '輸出', label: '輸出', color: 'bg-red-500 text-white'}, {id: '輔助', label: '輔助', color: 'bg-green-500 text-white'}, {id: '坦', label: '坦克', color: 'bg-blue-500 text-white'}];
@@ -411,6 +414,7 @@ const App = {
                 if (this.currentSquadRoleFilter !== 'all') { const filterKey = this.currentSquadRoleFilter; const match = m.role.includes(filterKey) || (filterKey === '坦' && m.mainClass.includes('坦')); if (!match) return ''; }
                 const job = (m.mainClass || '').split('(')[0]; 
                 
+                // [Modified] 移除左側邊框顏色，只保留文字顏色識別
                 let roleColor = 'text-slate-400';
                 if (m.role.includes('輸出')) { roleColor = 'text-red-500'; }
                 else if (m.role.includes('坦')) { roleColor = 'text-blue-500'; }
@@ -429,15 +433,21 @@ const App = {
                             subUI = `<select class="sub-select" onchange="app.updateGvgSub('${group.id}', '${m.id}', this.value)" onclick="event.stopPropagation()"><option value="">選擇替補...</option>${options}</select>`; 
                         } else if (m.subId) { const subMem = this.members.find(x => x.id === m.subId); if (subMem) subUI = `<span class="text-blue-500 text-xs mr-2">⇋ ${subMem.gameName}</span>`; }
                     }
+                    
+                    // [GVG Light Fix - FORCE STYLE]
                     const leaveLight = `<div style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; background-color: ${m.status === 'leave' ? '#fbbf24' : '#e2e8f0'}" title="請假"></div>`;
                     const statusColor = m.status === 'ready' ? '#22c55e' : '#ef4444';
                     const statusLight = `<div style="width: 12px; height: 12px; border-radius: 50%; border: 2px solid white; box-shadow: 0 1px 2px rgba(0,0,0,0.1); cursor: pointer; background-color: ${statusColor}" title="狀態: ${m.status}" onclick="event.stopPropagation(); app.toggleGvgStatus('${group.id}', '${m.id}', 'ready_toggle')"></div>`;
+                    
                     actionUI = `<div class="flex items-center gap-2">${subUI}${leaveLight}${statusLight}</div>`;
+
                 } else { actionUI = `<span class="text-xs text-slate-300 font-mono">ID:${m.id.slice(-3)}</span>`; }
 
+                // [Modified] 移除 border-l-4 和 borderColor 變數
                 return `<div class="flex items-center justify-between text-sm py-3 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 px-4 transition ${rowClass}"><div class="flex items-center gap-3 min-w-0"><div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold ${roleColor}">${m.role.substring(0,1)}</div><div class="flex flex-col min-w-0"><span class="text-slate-800 font-bold truncate member-name">${m.gameName}</span><span class="text-[10px] text-slate-400 font-mono">${job}</span></div></div>${actionUI}</div>`;
             }).join('');
 
+            // [Layout Fix] Remove fixed height constraints from card
             const headerClass = isGVG ? 'bg-red-50 p-4 border-b border-red-100 rounded-t-xl' : 'bg-blue-50 p-4 border-b border-blue-100 rounded-t-xl';
             const cardClass = isGVG ? 'bg-white rounded-xl shadow-md border border-slate-200 border-l-4 border-l-red-500 flex flex-col h-fit' : 'bg-white rounded-xl shadow-sm border border-blue-100 flex flex-col h-fit'; 
             
@@ -544,13 +554,13 @@ const App = {
             document.getElementById('squadAssignment').value = g.assignment || ''; 
             document.getElementById('deleteSquadBtnContainer').innerHTML = `<button type="button" onclick="app.deleteSquad('${id}')" class="text-red-500 text-sm hover:underline">解散</button>`;
             this.currentSquadMembers = g.members.map(m => typeof m === 'string' ? {id: m, status: 'pending'} : m);
-            this.updateLeaderOptions(); const leaderSelect = document.getElementById('squadLeader'); if(leaderSelect) leaderSelect.value = g.leaderId || "";
+            this.renderSquadMemberSelect(); this.updateLeaderOptions(); const leaderSelect = document.getElementById('squadLeader'); if(leaderSelect) leaderSelect.value = g.leaderId || "";
         } else {
             document.getElementById('squadName').setAttribute('data-current-val', '');
             document.getElementById('squadNote').value = ''; 
             document.getElementById('squadAssignment').value = ''; 
             document.getElementById('deleteSquadBtnContainer').innerHTML = ''; 
-            this.currentSquadMembers = []; 
+            this.currentSquadMembers = []; this.renderSquadMemberSelect();
         }
         
         // 渲染隊伍名稱選單 (必須在設定完 Date/Subject 後執行)
@@ -787,7 +797,7 @@ const App = {
         this.toggleWinnerSelection(winner.id);
     },
 
-    // [New] 匯出總覽圖表功能 - 支援工作分配分組 & 瀑布流 & 緊湊排版
+    // [Updated] 匯出總覽圖表 - 支援工作分配分組 & 橫向佈局 (Row-based)
     openSummaryModal: function() {
         const date = this.currentSquadDateFilter;
         const subject = this.currentSquadSubjectFilter;
@@ -809,6 +819,7 @@ const App = {
             return;
         }
 
+        // 1. Group by Assignment
         const grouped = {};
         const sortOrder = ['進攻組', '防守組', '遊走組', '後勤組', '未分配'];
         
@@ -818,6 +829,7 @@ const App = {
             grouped[key].push(g);
         });
 
+        // 2. Sort groups
         const sortedKeys = Object.keys(grouped).sort((a, b) => {
             const idxA = sortOrder.indexOf(a);
             const idxB = sortOrder.indexOf(b);
@@ -827,22 +839,27 @@ const App = {
             return a.localeCompare(b);
         });
 
+        // 3. Update Title
         document.getElementById('summaryTitle').innerText = subject;
         document.getElementById('summaryDate').innerHTML = `<i class="far fa-calendar-alt mr-1"></i>${date}`;
         document.getElementById('summarySubject').innerHTML = `<i class="fas fa-tag mr-1"></i>${subject}`;
 
+        // 4. Render Grid with Row Layout
         const grid = document.getElementById('summaryGrid');
+        grid.className = "flex flex-col gap-4"; // Change to flex col for full width rows
         let htmlContent = '';
 
         sortedKeys.forEach(key => {
+            // Full Width Row Container
             htmlContent += `
-                <div class="break-inside-avoid-column mb-4 bg-slate-50 rounded-lg overflow-hidden border border-slate-200">
-                    <div class="bg-indigo-100 text-indigo-900 px-3 py-2 font-black text-xl border-b border-indigo-200 flex items-center shadow-sm">
-                        <i class="fas fa-layer-group mr-2 opacity-50"></i>${key}
+                <div class="w-full mb-2 border border-slate-300 rounded overflow-hidden">
+                    <div class="bg-indigo-100 text-indigo-900 px-4 py-1 font-black text-lg border-b border-indigo-200 text-center shadow-sm">
+                        ${key}
                     </div>
-                    <div class="p-2 grid grid-cols-2 gap-2">
+                    <div class="p-1 grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-1 bg-slate-50">
             `;
 
+            // Render Squads horizontally within this row
             grouped[key].forEach((g, index) => {
                 const headerColor = index % 2 === 0 ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-emerald-50 border-emerald-100 text-emerald-900';
                 
@@ -862,21 +879,21 @@ const App = {
                     }
                     const leaveClass = (typeof m === 'object' && m.status === 'leave') ? 'line-through text-slate-400 decoration-slate-400' : leaderClass;
 
-                    return `<div class="py-0.5 px-0.5 border-b border-slate-100 last:border-0 text-base font-bold text-center ${leaveClass} flex justify-center items-center truncate leading-tight h-[28px] tracking-wide">
+                    return `<div class="py-0.5 px-0 border-b border-slate-200 last:border-0 text-sm font-bold text-center ${leaveClass} flex justify-center items-center truncate leading-tight h-[26px] tracking-wide w-full">
                         ${leaderIcon} ${mem.gameName}${subText}
                     </div>`;
                 }).join('');
 
                 const emptyRows = 6 - (g.members || []).length;
                 let emptyHtml = '';
-                if (emptyRows > 0) { for(let i=0; i<emptyRows; i++) { emptyHtml += `<div class="py-0.5 px-0.5 border-b border-slate-100 last:border-0 h-[28px]"></div>`; } }
+                if (emptyRows > 0) { for(let i=0; i<emptyRows; i++) { emptyHtml += `<div class="py-0.5 px-0 border-b border-slate-200 last:border-0 h-[26px]"></div>`; } }
 
                 htmlContent += `
-                <div class="bg-white border border-slate-300 flex flex-col shadow-sm rounded-sm overflow-hidden">
-                    <div class="${headerColor} py-1 text-center font-black text-lg border-b border-slate-200 tracking-wider truncate px-1">
+                <div class="bg-white border border-slate-300 flex flex-col shadow-sm rounded-sm overflow-hidden w-full">
+                    <div class="${headerColor} py-1 text-center font-black text-base border-b border-slate-300 tracking-wider truncate px-1">
                         ${g.name}
                     </div>
-                    <div class="divide-y divide-slate-50">
+                    <div class="divide-y divide-slate-200">
                         ${memberList}
                         ${emptyHtml}
                     </div>
